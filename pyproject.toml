@@ -1,6 +1,6 @@
 [project]
 name = "table-reclamation-demo"
-version = "0.1.0"
+version = "0.1.2"
 description = "Stats-guided analytical pattern generation for structured data discovery."
 authors = [{ name = "Ahmad Fares", email = "ahmad.fares@univ-grenoble-alpes.fr" }]
 readme = "README.md"
