@@ -627,6 +627,10 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+ui = [
     { name = "streamlit" },
 ]
 
@@ -641,8 +645,9 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "streamlit", specifier = ">=1.54.0" },
+    { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.54.0" },
 ]
+provides-extras = ["ui"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.2" }]

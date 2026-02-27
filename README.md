@@ -15,14 +15,23 @@ This demo operates over split versions of the MATHE dataset.
 ## Project Structure
 
 ```
-demo/
+table_reclamation/
+  __init__.py
   ui_app.py
-  gen_ap.py
-  nl_to_ur.py
-  execute_ap.py
-  prune.py
-  metrics.py
-  lexicon.json
+  assets/
+    lexicon.json
+  core/
+    __init__.py
+    execute_ap.py
+    gen_ap.py
+    nl_to_ur.py
+    utils.py
+  domain/
+    __init__.py
+    sql_operation.py
+  facade/
+    __init__.py
+    table_reclamation.py
 
 data/
   MATHE_random_100/
@@ -35,28 +44,45 @@ data/
 
 ## Setup
 
-### 1. Create virtual environment
+### Install dependencies
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+# Library only
+uv sync
 
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
+# With the Streamlit UI
+uv sync --extra ui
 ```
 
 ---
 
-## Run the Demo
+## Run the Demo UI
 
 ```bash
-streamlit run demo/ui_app.py
+uv run streamlit run table_reclamation/ui_app.py
 ```
 
 Open the local URL in your browser.
+
+---
+
+## Library Usage
+
+```python
+from pathlib import Path
+from table_reclamation import AccessPlanner
+
+planner = AccessPlanner(tables_path=Path("data/MATHE_random_100"))
+plan = planner.generate_plan("Find level 3 questions on algebra")
+for op in plan:
+    print(op)
+```
+
+Or run a script directly with uv:
+
+```bash
+uv run python my_script.py
+```
 
 ---
 
@@ -65,7 +91,7 @@ Open the local URL in your browser.
 - Dataset: MATHE
 - Split: random_100
 - Sources stored as CSV
-- Statistics stored in Parquet and json
+- Statistics stored in Parquet and JSON
 
 Execution runs fully in-memory using DuckDB.
 

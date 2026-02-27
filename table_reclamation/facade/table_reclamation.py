@@ -15,6 +15,8 @@ from table_reclamation.core import (
 )
 from table_reclamation.domain.sql_operation import SqlOperation
 
+_DEFAULT_LEXICON = Path(__file__).parent.parent / "assets" / "lexicon.json"
+
 
 class AccessPlanner:
     """
@@ -25,7 +27,7 @@ class AccessPlanner:
     _index: Dict[str, Any]
     _lexicon: Dict[str, Any]
 
-    def __init__(self, tables_path: Path, lexicon_path: Path = Path("assets/lexicon.json")) -> None:
+    def __init__(self, tables_path: Path, lexicon_path: Path = _DEFAULT_LEXICON) -> None:
         """
 
         """
