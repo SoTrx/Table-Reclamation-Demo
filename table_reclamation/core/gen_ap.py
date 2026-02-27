@@ -1,5 +1,10 @@
-import json, time, os
+import json
+import os
+import time
+
 import pandas as pd
+
+
 def _stats_keys(col, v):
     if isinstance(v, int):
         return [f"{col}:{v}", f"{col}:{float(v)}", f"{col}:{str(v)}"]
@@ -69,6 +74,7 @@ def gen_ap_order(UR, stats_data):
 def build_sql_plan(UR, order, stats_data, table_prefix="src"):
         value_index = stats_data["value_index"]
         source_vectors = stats_data["source_vectors"]
+        
 
         remaining = {c: set(vs) for c, vs in UR.items()}
         plan = []
@@ -103,7 +109,12 @@ def build_sql_plan(UR, order, stats_data, table_prefix="src"):
                     conditions.append(f"{col} IN ({in_list})")
 
             if conditions:
-                tbl = f"{table_prefix}{src_idx+1}"
+                source_files = stats_data.get("source_files")
+                if source_files:
+                    tbl = source_files[src_idx]          # use real name 
+                else:
+                    tbl = f"{table_prefix}{src_idx+1}"   # fallback 
+                
                 # sql = f"SELECT * FROM {tbl} WHERE " + " OR ".join(conditions)
                 
                 # In this case, we select only the relevant columns, the ones found in the UR: if the whole result needed, use the commented line above instead.
@@ -138,22 +149,30 @@ def build_storeap_payload(nl_query, UR, order, plan, *, dataset="MATHE", split="
     return {"ap": json.dumps(ap_obj)}
 
 def load_stats(split_path):
-        stats_json = os.path.join(split_path, "value_index.json")
-        stats_parquet = os.path.join(split_path, "stats.parquet")
+    stats_json = os.path.join(split_path, "value_index.json")
+    stats_parquet = os.path.join(split_path, "stats.parquet")
+    source_files_json = os.path.join(split_path, "source_files.json")  # NEW
 
-        with open(stats_json, "r") as f:
-            value_index = json.load(f)
+    with open(stats_json, "r") as f:
+        value_index = json.load(f)
 
-        df = pd.read_parquet(stats_parquet)
-        source_vectors = df.values
-        return {"value_index": value_index, "source_vectors": source_vectors}
+    df = pd.read_parquet(stats_parquet)
+    source_vectors = df.values
+
+    source_files = None
+    if os.path.exists(source_files_json):
+        with open(source_files_json, "r") as f:
+            source_files = json.load(f)
+
+    return {"value_index": value_index, "source_vectors": source_vectors, "source_files": source_files}
 
 
 
 # The following is a simple test/demo of the above functions. You can run this file directly to see how it works, and to generate example SQL plans for given URs.    
 if __name__ == "__main__":
 
-    import os, json
+    import json
+    import os
 
 
     split_path = "/Users/faresa/Desktop/TVD/data/generated_splits/MATHE/random_100"  

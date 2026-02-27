@@ -1,17 +1,22 @@
-import streamlit as st
-import json, os,sys
-import pandas as pd
+import json
+import os
+import sys
 
+import pandas as pd
+import streamlit as st
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from demo.gen_ap import build_sql_plan, gen_ap_order,build_storeap_payload
-from demo.nl_to_ur import parse_nl_to_ur
-import os, json
+import json
+import os
+
 from demo.execute_ap import execute_ap
+from demo.gen_ap import build_sql_plan, build_storeap_payload, gen_ap_order
+from demo.nl_to_ur import parse_nl_to_ur
 from demo.utils import EPrune
+
 LEXICON_PATH = os.path.join(PROJECT_ROOT, "demo", "lexicon.json")
 with open(LEXICON_PATH, "r") as f:
     LEXICON = json.load(f)
@@ -20,13 +25,20 @@ with open(LEXICON_PATH, "r") as f:
 def load_stats(split_path):
     stats_json = os.path.join(split_path, "value_index.json")
     stats_parquet = os.path.join(split_path, "stats.parquet")
+    source_files_json = os.path.join(split_path, "source_files.json")  # NEW
 
     with open(stats_json, "r") as f:
         value_index = json.load(f)
 
     df = pd.read_parquet(stats_parquet)
     source_vectors = df.values
-    return {"value_index": value_index, "source_vectors": source_vectors}
+
+    source_files = None
+    if os.path.exists(source_files_json):
+        with open(source_files_json, "r") as f:
+            source_files = json.load(f)
+
+    return {"value_index": value_index, "source_vectors": source_vectors, "source_files": source_files}
 
 
 st.set_page_config(page_title="TVD Demo", layout="wide")
@@ -83,6 +95,7 @@ if st.button("Generate AP"):
     else:
         UR = st.session_state["UR"]
         stats = load_stats(SPLIT_PATH)
+        st.session_state["stats"] = stats
 
         order = gen_ap_order(UR, stats)
         plan = build_sql_plan(UR, order, stats)
@@ -116,7 +129,8 @@ if "AP_plan" in st.session_state:
 
         result_df = execute_ap(
             st.session_state["AP_plan"],
-            split_path=SPLIT_PATH
+            split_path=SPLIT_PATH,
+            source_files=st.session_state["stats"].get("source_files")
         )
 
         st.session_state["result_df"] = result_df

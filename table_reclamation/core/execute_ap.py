@@ -1,9 +1,10 @@
-import duckdb
 import os
+
+import duckdb
 import pandas as pd
 
 
-def execute_ap(plan, split_path):
+def execute_ap(plan, split_path, source_files=None):
     """
     plan: list of {"table": ..., "sql": ...}
     split_path: path to folder with src_*.csv
@@ -18,13 +19,23 @@ def execute_ap(plan, split_path):
     )
 
     for i, fname in enumerate(csv_files):
-        table_name = f"src{i+1}"
+        if source_files:
+            table_name = source_files[i]   
+        else:
+            table_name = f"src{i+1}"
+
         csv_path = os.path.join(split_path, fname)
 
+        # Make reruns safe + handle special chars
+        con.execute(f'DROP TABLE IF EXISTS "{table_name}";')
         con.execute(f"""
-            CREATE TEMP TABLE {table_name} AS
+            CREATE TEMP TABLE "{table_name}" AS
             SELECT * FROM read_csv_auto('{csv_path}');
         """)
+    print(con.execute("DESCRIBE src_1").fetchdf())
+    print(con.execute("SELECT typeof(newLevel) t, count(*) c FROM src_1 GROUP BY 1").fetchdf())
+    print(con.execute("SELECT count(*) FROM src_1 WHERE newLevel='2'").fetchone())
+    print(con.execute("SELECT count(*) FROM src_1 WHERE newLevel=2").fetchone()) 
 
     # 2) execute AP SQL steps
     results = []
