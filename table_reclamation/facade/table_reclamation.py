@@ -138,7 +138,13 @@ class AccessPlanner:
         # TODO: Remove this patching step by step as the UR generation is improved to produce the correct format directly.
         ur = self._patch_ur(ur)
         order = gen_ap_order(ur, self._index)
-        return build_sql_plan(ur, order, self._index)
+        raw_plan = build_sql_plan(ur, order, self._index)
+        plan: List[SqlOperation] = []
+        for step in raw_plan:
+            op = SqlOperation(**step)
+            plan.append(op)
+
+        return plan
 
     def generate_stats(self) -> None:
         """
