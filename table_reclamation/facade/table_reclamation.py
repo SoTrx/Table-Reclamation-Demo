@@ -3,7 +3,6 @@ This is a facade that makes it easy to use the library without having to underst
 The core can be extended without affecting the facade, and the facade can be extended without affecting the core. 
 """
 import logging
-import os
 from json import load
 from pathlib import Path
 from typing import Any, Dict, List
@@ -17,10 +16,12 @@ from table_reclamation.core import (
 )
 from table_reclamation.core.generate_stats import generate_stats_from_folder
 from table_reclamation.domain.sql_operation import SqlOperation
+from table_reclamation.domain.stats_dir_structure import StatDirectoryStructure
 
 _DEFAULT_LEXICON = Path(__file__).parent.parent / "assets" / "lexicon.json"
 
 logger = logging.getLogger(__file__)
+
 
 class AccessPlanner:
     """
@@ -41,8 +42,7 @@ class AccessPlanner:
         with open(lexicon_path) as f:
             self._lexicon = load(f)
 
-
-    def __read_reverse_index(self, tables_path: Path) -> Dict[str, Any]:
+    def __read_stats(self, stats_path: Path) -> Dict[str, Any]:
         """
         Read the mapping of the distribution of values in the tables.
         Arguments:
@@ -50,8 +50,9 @@ class AccessPlanner:
         Returns:
             A dictionary containing the value index and source vectors.
         """
-        vi_path = tables_path / "value_index.json"
-        pq_path = tables_path / "stats.parquet"
+        vi_path = stats_path / "value_index.json"
+        pq_path = stats_path / "stats.parquet"
+
         with open(vi_path) as f:
             value_index = load(f)
 
@@ -69,29 +70,26 @@ class AccessPlanner:
         Returns:
             A list of SqlOperation objects representing the SQL plan.
         """
-
-        self._index = self.__read_reverse_index(self._tables_path)
+        try:
+            self._index = self.__read_stats(self._tables_path)
+        except FileNotFoundError:
+            raise ValueError("Statistics not generated for tables path.")
 
         ur = parse_nl_to_ur(query, self._lexicon)
         order = gen_ap_order(ur, self._index)
         return build_sql_plan(ur, order, self._index)
-    
+
     def generate_stats(self) -> None:
-
-        logger.debug("\n=== GENERATING STATS ===")
+        """
+        Generates the statistics for the tables and saves them to the tables directory. 
+        This should be run before generating any plans, and should be re-run whenever the tables are updated.
+        """
         value_index, vectors = generate_stats_from_folder(self._tables_path)
+        if value_index is None and vectors is None:
+            logger.info("Statistics already generated")
 
-        logger.debug("\n=== DONE ===")
-        logger.debug(f"Number of sources : {len(vectors)}")
-        logger.debug(f"Vector size       : {len(value_index)}")
-
-        # quick verification
-        stats_file = os.path.join(self._tables_path, "stats.parquet")
-        mapping_file = os.path.join(self._tables_path, "value_index.json")
-        sources_file = os.path.join(self._tables_path, "source_files.json")
-
-        logger.debug("\nGenerated files:")
-        logger.debug(stats_file)
-        logger.debug(mapping_file)
-        logger.debug(sources_file)
-
+        return StatDirectoryStructure(
+            stats_file=self._tables_path / "stats.parquet",
+            mapping_file=self._tables_path / "value_index.json",
+            sources_file=self._tables_path / "source_files.json",
+        )
