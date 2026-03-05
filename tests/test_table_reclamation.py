@@ -1,9 +1,20 @@
+import pytest
+
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
+QUESTIONS = [
+    "How can I solve a linear system 4x4?",
+    "What are the basic concepts of learning linear optimization?",
+    "How do I begin my study about linear optimization?",
+    "What is the role of the objective function in finding the optimum solution in a linear optimization problem?",
+    "What is the role of constraints in a linear optimization problem?",
+    "How is the optimal solution usually found in a linear optimization problem?",
+]
 
-def test_generate_mathe_plan(planner_mathe: AccessPlanner):
+
+@pytest.mark.parametrize("question", QUESTIONS)
+def test_generate_mathe_plan(planner_mathe: AccessPlanner, question: str):
     planner_mathe.generate_stats()
-    plan = planner_mathe.generate_plan(
-        "Discrete Mathematics Recursivity level 2")
+    plan = planner_mathe.generate_plan(question)
     print(plan)
     assert len(plan) > 0
