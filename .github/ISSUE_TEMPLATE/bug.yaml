@@ -2,7 +2,7 @@
 ---
 name: Bug Report
 description: Report broken functionality
-title: <BUG TITLE>
+title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
