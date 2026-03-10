@@ -1,0 +1,23 @@
+id,id_top,name,hidden
+1,7,Elementary Geometry,0
+2,7,"Algebraic expressions, Equations, and Inequalities",0
+3,4,Derivatives,0
+4,4,Partial Differentiation,0
+5,5,Integration Techniques,0
+6,5,Double Integration,0
+7,18,Matrices and Determinants,0
+8,18,Eigenvalues and Eigenvectors,0
+9,18,Linear Systems,0
+10,18,Vector Spaces,0
+11,18,Linear Transformations,0
+12,12,Linear Optimization,0
+13,12,Nonlinear Optimization,0
+37,3,Limits and Continuity,0
+39,3,"Domain, Image and Graphics",0
+41,15,"Limits, Continuity, Domain and Image",0
+42,4,Implicit Differentiation and Chain Rule,0
+44,5,Definite Integrals,0
+45,5,Triple Integration,0
+46,28,Set Theory,0
+47,28,Recursivity,0
+53,5,Surface Integrals,0

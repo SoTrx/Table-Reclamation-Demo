@@ -9,12 +9,13 @@ QUESTIONS = [
     "What is the role of the objective function in finding the optimum solution in a linear optimization problem?",
     "What is the role of constraints in a linear optimization problem?",
     "How is the optimal solution usually found in a linear optimization problem?",
+    "Fetch the assessments of student number 1273 and student number 3409",
 ]
 
 
 @pytest.mark.parametrize("question", QUESTIONS)
-def test_generate_mathe_plan(planner_mathe: AccessPlanner, question: str):
-    planner_mathe.generate_stats()
-    plan = planner_mathe.generate_plan(question)
+def test_generate_mathe_plan(planner_mathe_split: AccessPlanner, question: str):
+    planner_mathe_split.generate_stats()
+    plan = planner_mathe_split.generate_plan(question)
     print(plan)
-    assert len(plan) > 0
+    assert len(plan) > 1

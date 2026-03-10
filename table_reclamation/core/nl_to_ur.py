@@ -1,5 +1,6 @@
-import re
 import json
+import re
+
 
 def _norm(s: str) -> str:
     s = s.lower().strip()
@@ -13,7 +14,7 @@ def _norm(s: str) -> str:
 
 
 STOPWORDS = {
-    "of","a","an","the","how","can","i","to","please","me","do","did","is","are"
+    "of", "a", "an", "the", "how", "can", "i", "to", "please", "me", "do", "did", "is", "are"
 }
 
 
@@ -37,13 +38,14 @@ QUESTION_PATTERNS = [
 ANSWER_PATTERN = r"\banswer\s*(?:is|:)?\s*(.+)"  # explicit only
 
 # Note: this is a very simple parser that relies on exact matches and regex patterns. It can be easily extended with more sophisticated NLP techniques if needed, but this should work reasonably well for simple queries.
+
+
 def expand_synonyms(text: str) -> str:
     words = text.split()
     expanded = []
     for w in words:
         expanded.extend(SYNONYMS.get(w, [w]))
     return " ".join(expanded)
-
 
 
 def parse_nl_to_ur(text: str, lexicon: dict) -> dict:
@@ -55,7 +57,7 @@ def parse_nl_to_ur(text: str, lexicon: dict) -> dict:
     t = expand_synonyms(_norm(text))
     t_tokens = set(t.split())
 
-    for attr in ["topic_name", "subtopic_name", "keyword_name"]:
+    for attr in ["topic_name", "subtopic_name", "keyword_name", "student_id"]:
         phrases = lexicon.get(attr, [])
         matched = []
         for p in phrases:

@@ -1,0 +1,400 @@
+id,id_top,id_sub,name,hidden
+1,7,2,Trigonometric functions,0
+2,7,2,Exponential function,0
+3,7,2,Linear equations,0
+4,7,2,Quadratic equations,0
+5,7,2,Simplify expressions,0
+6,7,2,Logarithmic function,0
+7,7,2,Absolute value,0
+8,7,2,Square roots,0
+9,7,1,Geometrical figures,0
+10,7,1,Geometric solids,0
+11,7,1,Classification of geometric solids,0
+12,7,1,Classification of geometrical figures,0
+13,7,1,Polyhedrons,0
+14,7,1,Platonic solids,0
+15,7,1,Polygons,0
+16,7,1,Triangles,0
+17,7,1,Quadrilaterals,0
+18,7,1,Triangle inequality,0
+19,7,1,Geometric transformations,0
+20,7,1,Symmetry,0
+21,7,1,Regular polygon,0
+22,7,1,Rhombus,0
+23,10,,Real part,0
+24,10,,Imaginary part,0
+25,10,,Modulus of a complex number,0
+26,10,,Conjugate number,0
+27,10,,Polar representation,1
+28,10,,De Moivre formulas,0
+29,10,,Nth root,0
+30,10,,Complex plane ,0
+31,10,,Trigonometric form,0
+32,10,,Principal argument,0
+33,10,,Operations with complex numbers,0
+34,10,,Exponential form,0
+35,17,,Sample space,0
+36,17,,Event,0
+37,17,,Random experiments,0
+38,17,,Independence,0
+39,17,,Bayes' Theorem,0
+40,17,,Random variables,0
+41,17,,Conditional probability,0
+42,17,,Counting techniques,0
+43,17,,Axioms of probability,0
+44,17,,"Addition, multiplication, and total probability rules",0
+45,14,,Sample,0
+46,14,,Population,0
+47,14,,Frequency,0
+48,14,,Relative frequency,0
+49,14,,Mean,0
+50,14,,Standard deviation,0
+51,14,,Variance,0
+52,14,,Median,0
+53,14,,Mode,0
+54,14,,Data type,0
+55,14,,Quantile,0
+56,14,,Chi square distribution,0
+57,14,,Stem and Leaf diagram,0
+58,14,,Hypothesis testing,0
+59,14,,Confidence interval,0
+60,14,,Point estimate,0
+61,14,,Interquartile range,0
+62,14,,Linear regression,0
+63,14,,Student distribution,0
+64,25,,Scalar product,0
+65,25,,Cross product,0
+66,25,,Orthogonality,0
+67,25,,Scalar triple product,0
+68,25,,Collinearity,0
+69,25,,Orthogonal projection,0
+70,25,,Distance,0
+71,25,,Locus,0
+72,25,,Cartesian equations of a line,0
+73,25,,Cartesian equations of a plane,0
+74,25,,Intersection,0
+75,22,,Simple graph,0
+76,22,,Incidence matrix ,0
+77,22,,Adjacency matrix,0
+78,22,,Path,0
+79,22,,Cycle and circuit,0
+80,22,,Planar graph,0
+81,22,,Tree,0
+82,22,,Shortest path,0
+83,22,,Spanning tree,0
+84,22,,Chromatic number,0
+85,4,3,Product rule,0
+86,4,3,Exponential rule,0
+87,4,3,Logarithmic rule,0
+88,4,3,Sum rule,0
+90,4,3,Quotient rule,0
+91,4,3,Power rule,0
+92,4,3,Trigonometric rules,0
+93,4,3,Second order,0
+97,4,4,Gradient,0
+98,4,4,Directional derivative,0
+99,4,4,Second order,0
+100,4,4,Hessian,0
+101,5,5,Substitution,0
+102,5,5,Integration by parts,0
+103,5,5,Direct inspection,0
+104,5,5,Trigonometric substitution,0
+105,5,5,Rational functions,0
+106,5,5,Power of trigonometric functions,0
+107,5,5,Simple integration,0
+108,5,6,Cartesian coordinates,0
+109,5,6,Polar coordinates,0
+110,5,6,Area ,0
+111,5,6,Iterate integrals,0
+112,5,6,x-simple region (type II),0
+113,5,6,y-simple region (type I),0
+114,18,7,Matrix multiplication,0
+115,18,7,Commuting matrices,0
+116,18,7,Matrix operations,0
+117,18,7,Matrix equation,0
+118,18,7,Rank,0
+119,18,7,Matrix condensation,0
+120,18,7,Linearly independent rows,0
+121,18,7,Inverse of a matrix ,0
+122,18,7,Determinant computation,0
+123,18,7, Properties of the determinant,0
+124,18,7,Symmetric matrix,0
+125,18,7,Hermitian matrix,0
+127,18,8,Eigenvalues,0
+128,18,8,Eigenvectors,0
+129,18,8,Spectrum,0
+130,18,8,Spectral radius,0
+131,18,8,Spectral shift,0
+132,18,8,Characteristic polynomial,0
+133,18,8,Diagonalization,0
+134,18,8,Inverse matrix,0
+135,18,8,Orthonormal matrix,0
+136,18,8,Diagonalization with orthonormal basis,0
+137,18,9,Square linear system,0
+138,18,9,Solution of a linear system,0
+139,18,9,Consistent system,0
+140,18,9,Inconsistent system,0
+141,18,9,Undetermined linear system,0
+142,18,9,Cramer linear system,0
+143,18,9,Homogeneous system,0
+145,18,10,Vector space,0
+146,18,10,Vector subspace,0
+147,18,10,Linear combination,0
+148,18,10,Span,0
+149,18,10,Linear dependence,0
+150,18,10,Linear independence,0
+151,18,10,Basis,0
+152,18,10,Dimension,0
+153,18,10,Euclidean spaces,0
+154,18,10,Orthogonal basis,0
+155,18,10,Change-of-basis matrix,0
+156,18,11,Linearity,0
+157,18,11,Linear transformation,0
+158,18,11,Matrix of a linear transformation,0
+159,18,11,Kernel,0
+160,18,11,Range,0
+161,18,11,Injective linear transformation,0
+162,18,11,Isomorphism,0
+163,18,11,Rotation,0
+164,18,11,Invertible linear transformation,0
+165,18,11,Composition of linear transformations,0
+166,12,12,Linear programming,0
+167,12,12,Simplex method,0
+168,12,12,Graphical method,0
+169,12,12,Excel solver add-in,0
+170,12,12,Duality theory,0
+171,12,12,Postoptimality analysis,0
+172,12,12,Sensitivity analysis,0
+173,12,12,Transportation problem,0
+174,12,12,Assignment problem,0
+175,12,12,Hungarian algorithm,0
+176,12,13,Optimal solution,0
+177,12,13,Minimum,0
+178,12,13,Maximum,0
+179,12,13,Feasible set,0
+180,12,13,KKT conditions,0
+181,12,13,Stationary point,0
+182,3,37,Limits,0
+183,3,37,Continuity,0
+184,3,37,Continuous function,0
+185,3,37,Discontinuity,0
+186,3,37,L'Hopital´s Rule,0
+187,3,37,The Squeeze theorem,0
+188,3,37,Indeterminate forms,0
+191,3,39,Domain,0
+192,3,39,Codomain,0
+193,3,39,Image of a function,0
+199,16,,Integral curve,0
+200,16,,Separable variables equation,0
+201,16,,Homogeneous equation,0
+202,16,,Linear differential equation,0
+203,16,,Cauchy problem,0
+204,16,,Bernoulli equation,0
+205,16,,Exact differential form,0
+206,16,,Ricatti equation,0
+207,15,,Domain of functions of several variables,0
+208,15,,Stationary Points,0
+209,15,,Critical Points,0
+210,15,,Maximum Point,0
+211,15,,Maximum of the function,0
+212,15,,Minimum point,0
+213,15,,Minimum of the function,0
+214,15,,Saddle point,0
+215,15,,Continuity and Limit of function of several variables,0
+221,5,6,Changing order of integration,0
+222,26,,Bisection method,0
+223,26,,Newton’s method,0
+224,26,,Nonlinear equation,0
+225,4,42,One variable,0
+226,4,42,Two variables,0
+227,4,42,More than two variable,0
+228,4,42,Power rule,0
+229,4,42,Exponential rule,0
+230,4,42,Quotient rule,0
+231,15,41,Domain,0
+232,15,41,Continuity,0
+233,15,41,Limits,0
+234,15,41,Image,0
+249,5,44,Fundamental theorem of Calculus,0
+250,5,44,Direct integrals ,0
+251,5,44, Integration by parts,0
+252,5,44,Trigonometric substitution,0
+253,5,44,Partial fractions decomposition,0
+254,5,44, Trigonometric functions,0
+255,5,44,Area of a planar region ,0
+256,5,44,Volume of revolution,0
+257,4,42,Chain rule,0
+258,5,44,Substitution,0
+259,12,12,Minimum cost method,0
+260,12,12,Northwest corner method,0
+261,12,13,Saddle point,0
+262,12,13,Lagrange multipliers,0
+263,18,9,Rouché-Capelli theorem,0
+264,14,,Outliers,0
+265,4,4,First order,0
+266,4,4,Third order,0
+267,12,13,Second derivative test,0
+268,26,,Lagrange's interpolation,0
+269,26,,Polynomial interpolation,0
+270,26,,Newton’s interpolation,0
+271,26,,Least square method,0
+272,26,,Polynomial regression,0
+273,12,13,Constrained optimization,0
+274,12,13,Unconstrained optimization,0
+275,5,45,Triple integration,0
+277,5,45,Cylindrical coordinates,0
+278,5,45,Spherical coordinates,0
+279,5,45,Volume,0
+280,5,45,Rectangular coordinates,0
+281,28,46,Binary relation,0
+282,28,46,Cardinality,0
+283,28,46,Cartesian product,0
+284,28,46,Complement of a set,0
+285,28,46,Equivalence relation,0
+286,28,46,Intersection of sets,0
+287,28,46,Reflexive binary relation,0
+288,28,46,Set,0
+289,28,46,Subset,0
+290,28,46,Superset,0
+291,28,46,Symmetric binary relation,0
+292,28,46,Transitive binary relation,0
+293,28,46,Union of sets,0
+294,28,46,Venn diagram,0
+295,5,53,Definition,0
+296,5,53,Divergence theorem,0
+297,5,53,Open surface,0
+298,5,53,Closed surface,0
+299,28,47,Arithmetic sequence,0
+300,28,47,Geometric sequence,0
+301,28,47,Generating function,0
+302,28,47,Homogeneous linear recurrences,0
+303,28,47,Non-homogeneous linear recurrence,0
+304,28,47,Closed formula,0
+305,28,47,Patterns,0
+306,7,1,Surface area,0
+307,5,53,Surface integral of a scalar function,0
+308,5,53,Surface integral of a vector field,0
+310,10,,Algebraic form,0
+311,10,,Regions in the complex plane,0
+312,10,,Powers of i,1
+313,10,,Powers of complex numbers,0
+314,10,,Equations involving complex numbers,0
+315,5,45,Integration over a box,0
+316,5,45,Integration over a generic region,0
+317,7,2,Rearranging equations,0
+318,7,2,Root’s equation,0
+319,7,2,Solution range,0
+320,7,2,Inequations,0
+321,7,2,Nonlinear equations,0
+322,18,8,Trace of a matrix,0
+323,18,8,Determinant,0
+324,18,8,Similar matrices,0
+325,18,8,Symmetric matrix,0
+326,18,8,Power matrix,0
+327,18,8,Eigenspace,0
+328,18,9,Dependent system,0
+329,18,9,Independent system,0
+330,28,46,Power set,0
+331,28,46,Antisymmetric binary relation,0
+332,28,46,Set difference,0
+333,28,46,Proper subset,0
+334,28,46,Element of a set,0
+335,3,39,Polynomials,0
+336,3,39,Logarithmic function,0
+337,3,39,Trigonometric functions,0
+338,3,39,Roots of a function,0
+339,3,39,Periodicity of a function,0
+340,3,39,Monotonicity of a function,0
+341,3,39,Injectivity of a function,0
+342,3,39,Surjectivity of a function,0
+343,3,39,Continuity of a function,0
+344,3,39,Boundedness of a function,0
+345,3,39,Parity of a function,0
+346,3,39,Sign of a function,0
+348,25,,Magnitude of vectors,0
+349,25,,Relative position of vectors,0
+350,26,,Secant method,0
+351,26,,Jacobi method,0
+352,26,,Gauss-Seidel method,0
+353,26,,Three points rule,0
+354,26,,Five points rule,0
+355,26,,Simpson's rule,0
+356,26,,Trapezoidal rule,0
+357,26,,Relative error,0
+358,26,,Absolute error,0
+359,26,,Least squares method,0
+360,15,41,Derivatives,0
+361,15,41,Graph,0
+362,15,41,Contour map,0
+363,15,41,Level curve,0
+364,22,,Complete graph,0
+365,22,,Hamiltonian graph,0
+366,22,,Euler circuit,0
+367,22,,Eulerian graph,0
+368,22,,Adjacent vertices,0
+369,22,,Subgraph,0
+370,22,,Regular graph,0
+371,22,,Connectivity of a graph,0
+372,22,,Isomorphic graphs,0
+373,22,,Directed graph,0
+374,22,,Bipartite graph,0
+375,22,,Complement of a graph,0
+376,22,,Kruskal algorithm,0
+377,22,,Prim algorithm,0
+378,22,,Dijkstra algorithm,0
+379,16,,Integrating factor,0
+380,16,,Euler's method,0
+381,16,,Elimination method,0
+382,16,,Linear system,0
+383,16,,Lagrange's method,0
+384,16,,Integral form,0
+386,16,,Constant coefficient ODE,0
+387,25,,Vector Operations,0
+388,10,,Complex coefficients ,0
+389,14,,Correlation,0
+390,14,,Normal distribution,0
+391,3,39,Hyperbolic functions,0
+392,3,39,Graphic representation,0
+393,3,37,Definition and properties,0
+394,7,1,Angles,0
+395,14,,Significance level,0
+396,12,12,Constrained optimization,0
+397,12,12,Unconstrained optimization,0
+398,25,,Projection,0
+399,25,,Bases,0
+400,16,,Characteristic equation,0
+401,16,,Reduction order method,0
+402,16,,Wronskian,0
+403,16,,Undetermined coefficient method,0
+404,16,,Parameters variation method,0
+405,4,4,Higher order,0
+406,4,4,Tangent plane,0
+408,5,53,Stoke's theorem,0
+409,17,,Combinatorics,0
+410,17,,Permutation,0
+412,3,39,Composition function,0
+413,3,37,Convergency,0
+414,3,37,Divergency,0
+415,12,13,Minimizer,0
+416,12,13,Maximizer,0
+418,12,12,Maximum ,0
+419,12,12,Minimum,0
+420,12,12,Minimizer,0
+421,12,12,Maximizer,0
+422,14,,Percentage,0
+424,14,,Randomness,0
+425,14,,Non linear regression,0
+426,7,1,Perimeter,0
+427,4,42,Trigonometric rules,0
+428,4,4,Trigonometric rules,0
+431,22,,Euler's Formula,0
+432,22,,Weighted graph,0
+433,18,7,Transpose,0
+434,18,8,Square matrices,0
+435,18,8,Rank,0
+436,18,9,Linear system with parameters,0
+437,5,5,Trigonometric functions,0
+438,5,5,Trigonometric identities,0
+439,5,44,Area of a region between two or more curves,0
+440,5,44,Region decomposition,0
+441,5,6,Region decomposition,0
