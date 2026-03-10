@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://www.schemastore.org/github-issue-forms.json
+---
+name: Bug Report
+description: Report broken functionality
+title: <BUG TITLE>
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "## Bug information"
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: How can we recreate this bug? Be specific.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Observed behavior
+      description: What you're experiencing that you believe is a bug.
+      placeholder: |
+        If applicable, add screenshots to help explain your problem.
+
+        Tip: You can attach images or files by clicking this area to highlight it and then dragging files in.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Desired behavior
+      description: What you're expecting to happen.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Workaround
+      description: Have you found a workaround to get you unblocked?
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: "## Contextual information"
+  - type: textarea
+    attributes:
+      label: tag version
+      description: Which version of the project are you using ?
+      placeholder: Look at the container tag
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here.
+      placeholder: |
+        Links? References? Anything that will give us more context about the issue you are encountering!
+
+        Tip: You can attach images or files by clicking this area to highlight it and then dragging files in.
+    validations:
+      required: false
