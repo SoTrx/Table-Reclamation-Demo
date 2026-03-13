@@ -139,9 +139,10 @@ class AccessPlanner:
         ur = self._patch_ur(ur)
         order = gen_ap_order(ur, self._index)
         raw_plan = build_sql_plan(ur, order, self._index)
+
         plan: List[SqlOperation] = []
         for step in raw_plan:
-            op = SqlOperation(**step)
+            op = SqlOperation(**step, type='Query')
             plan.append(op)
 
         return plan
