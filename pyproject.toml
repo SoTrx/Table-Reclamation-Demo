@@ -6,10 +6,13 @@ authors = [{ name = "Ahmad Fares", email = "ahmad.fares@univ-grenoble-alpes.fr" 
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "dotenv>=0.9.9",
     "duckdb>=1.4.4",
+    "litellm>=1.82.4",
     "pandas>=2.3.3",
     "pyarrow>=23.0.1",
     "pydantic>=2.12.5",
+    "pypdf>=6.9.1",
 ]
 
 [project.optional-dependencies]

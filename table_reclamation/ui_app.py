@@ -4,24 +4,24 @@ import sys
 
 import pandas as pd
 import streamlit as st
+from core.execute_ap import execute_ap
+from core.gen_ap import build_sql_plan, build_storeap_payload, gen_ap_order
+from core.nl_to_ur import parse_nl_to_ur
+from core.utils import EPrune
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-import json
-import os
 
-from demo.execute_ap import execute_ap
-from demo.gen_ap import build_sql_plan, build_storeap_payload, gen_ap_order
-from demo.nl_to_ur import parse_nl_to_ur
-from demo.utils import EPrune
-
-LEXICON_PATH = os.path.join(PROJECT_ROOT, "demo", "lexicon.json")
+LEXICON_PATH = os.path.join(
+    PROJECT_ROOT, "table_reclamation/assets", "lexicon.json")
 with open(LEXICON_PATH, "r") as f:
     LEXICON = json.load(f)
 
 # Load stats data (value index and source vectors) from the given split path.
+
+
 def load_stats(split_path):
     stats_json = os.path.join(split_path, "value_index.json")
     stats_parquet = os.path.join(split_path, "stats.parquet")
@@ -67,9 +67,9 @@ with col1:
     parse_button = st.button("Parse NL → UR")
 
 if parse_button and nl_query:
-    parsed_ur = parse_nl_to_ur(nl_query, LEXICON) 
-    
-    st.session_state["UR"] = parsed_ur  # to keep the UR saved in the session. 
+    parsed_ur = parse_nl_to_ur(nl_query, LEXICON)
+
+    st.session_state["UR"] = parsed_ur  # to keep the UR saved in the session.
 
 with col2:
     if "UR" in st.session_state:
@@ -85,7 +85,7 @@ st.divider()
 # =========================
 st.header("3) Generate AP (SQL plan)")
 
-SPLIT_PATH = "data/MATHE_random_100"
+SPLIT_PATH = "../data/MATHE_random_100"
 
 # ---- STEP 1: Generate AP ----
 if st.button("Generate AP"):
@@ -103,7 +103,7 @@ if st.button("Generate AP"):
         st.session_state["AP_order"] = order
         st.session_state["AP_plan"] = plan
 
-# Show AP 
+# Show AP
 if "AP_plan" in st.session_state:
 
     st.subheader("SQL Plan")
@@ -136,7 +136,7 @@ if "AP_plan" in st.session_state:
         st.session_state["result_df"] = result_df
 
 
-# Show execution result 
+# Show execution result
 if "result_df" in st.session_state:
 
     st.subheader("Execution Result")
