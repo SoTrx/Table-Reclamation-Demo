@@ -1,14 +1,42 @@
+from multiprocessing import Pool, cpu_count
 from os import read
 from pathlib import Path
 
 import dotenv
 import pytest
+import tiktoken
 from litellm import BaseModel, completion
 from pypdf import PdfReader
 
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
+
+################# For Tiktoken tokenizer #################
+
+
+def chunk_text(text, max_tokens=100, overlap=200):
+    enc = tiktoken.get_encoding("cl100k_base")  # works fine for most LLMs
+    tokens = enc.encode(text)
+
+    chunks = []
+    start = 0
+
+    while start < len(tokens):
+        end = start + max_tokens
+        chunk = tokens[start:end]
+        chunks.append(enc.decode(chunk))
+
+        start += max_tokens - overlap  # overlap prevents cutting rows
+
+    return chunks
+
+############## PDF text extract in parallel #############
+
+
+def extract_page_text(i, file_path):
+    reader = PdfReader(file_path)  # reopen inside process
+    return reader.pages[i].extract_text()
 
 
 QUESTIONS = [
@@ -48,113 +76,114 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
         data: list[Data]
 
     for p in plan:
+        # TODO: returned UR from Fares' model has to contain the type either 'Document' or 'Query', for now I'm hardcoding it to 'Document' to test the LLM prompt.
         p.type = 'Document'
+        # added id to check for any hallucination from the model.
         p.sql = "SELECT id, student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')"
-        # p = {SqlOperation(src_idx=1,
-        #                   table='mathe.assessment_10',
-        #                   sql="SELECT DISTINCT student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')",
-        #                   type='Query'),
 
-        #      plan = [SqlOperation(src_idx=1,
-        #              table='mathe.assessment_10',
-        #              sql="SELECT DISTINCT student_id ...ERE student_id IN ('3409')",
-        #              type='Query'),
-        #              SqlOperation(src_idx=5,
-        #              table='mathe.assessment_4',
-        #              sql="SELECT DISTINCT student_id F...ERE student_id IN ('1273')",
-        #              type='Query')]}
         if (p.type == 'Query'):
             # TODO: Execute OP, but not my scope for now.
             pass
         elif (p.type == 'Document'):
-
             # Pass the document & query to LLM.
             # Step 1. Read Document (only PDF for now)
             file_path = Path(
                 "/workspaces/Table-Reclamation-Demo/data/mathe_splitted/mathe.assessment_10.pdf")
-            DocumentReader = PdfReader(file_path)
-            # text = DocumentReader.pages[0].extract_text()
-            text = 'id student_id question_id topic subtopic question_level answer date\n20984 3412 297 17 1 1 2024-06-11 01:14:54+00\n20985 3416 139 18 7 2 0 2024-06-11 01:15:04+00\n20986 3415 648 18 7 2 0 2024-06-11 01:15:13+00\n20987 3416 633 18 7 1 1 2024-06-11 01:15:20+00\n20988 3409 135 18 7 1 0 2024-06-11 01:15:21+00\n'
+            # DocumentReader = PdfReader(file_path)
             # text = ""
             # for i in range(len(DocumentReader.pages)):
             #     text += DocumentReader.pages[i].extract_text()
 
-            response = completion(
+            DocumentReader = PdfReader(file_path)
+            num_pages = len(DocumentReader.pages)
 
-                model="ollama/qwen3.5:9b",
-                temperature=0,
-                messages=[
-                    {"role": "system", "content": """
-                                    You are a SQL execution engine working on extracted table text.
+            with Pool(cpu_count()) as pool:
+                results = pool.map(extract_page_text, range(num_pages))
+            text = "".join(results)
 
-                                    You MUST:
-                                    - Execute the SQL query on the provided dataset
-                                    - Return ONLY valid JSON matching the schema
-                                    - NEVER repeat the query
-                                    - ALWAYS extract and filter rows manually from the dataset
+            ############ tiktoken setup ############
+            chunks = chunk_text(text)
+            all_results = []
+            ##########################################
 
-                                    Output schema:
-                                    {
-                                    "data": [
+            for i, chunk in enumerate(chunks):
+                print(f"Processing chunk {i+1}/{len(chunks)}")
+                response = completion(
+                    model="ollama/qwen3.5:9b",
+                    messages=[
+                        {"role": "system", "content": """
+                                        You are a SQL execution engine working on extracted table text.
+
+                                        You MUST:
+                                        - Execute the SQL query on the provided dataset
+                                        - Return ONLY valid JSON matching the schema
+                                        - NEVER repeat the query
+                                        - ALWAYS extract and filter rows manually from the dataset
+
+                                        Output schema:
                                         {
-                                        "header": ["column1", ...],
-                                        "data": [["value1", ...]],
-                                        "explanation": "short explanation"
+                                        "data": [
+                                            {
+                                            "header": ["column1", ...],
+                                            "data": [["value1", ...]],
+                                            "explanation": "short explanation"
+                                            }
+                                        ]
                                         }
-                                    ]
-                                    }
 
-                                    IMPORTANT:
-                                    - Be aware there might be more than one matching row, in that case fetch all of them.
-                                    - The dataset is RAW TEXT extracted from a table
-                                    - Rows are space-separated
-                                    - First row contains column names
-                                    - You must manually parse and filter rows
+                                        IMPORTANT:
+                                        - Be aware there might be more than one matching row, in that case fetch all of them.
+                                        - The dataset is RAW TEXT extracted from a table
+                                        - Rows are space-separated
+                                        - First row contains column names
+                                        - You must manually parse and filter rows
 
-                                    --------------------------------
-                                    FEW-SHOT EXAMPLES
-                                    --------------------------------
+                                        --------------------------------
+                                        FEW-SHOT EXAMPLES
+                                        --------------------------------
 
-                                    Example 1:
+                                        Example 1:
 
-                                    SQL Query:
-                                    SELECT DISTINCT id, name FROM table WHERE id IN ('36', '49');
+                                        SQL Query:
+                                        SELECT DISTINCT id, name FROM table WHERE id IN ('36', '49');
 
-                                    Dataset:
-                                    id name
-                                    1 36 Jason
-                                    2 49 Alice
-                                    3 60 Bob
+                                        Dataset:
+                                        id name
+                                        1 36 Jason
+                                        2 49 Alice
+                                        3 60 Bob
 
-                                    Output example:
-                                    {
-                                    "data": [
+                                        Output example:
                                         {
-                                        "header": ["id", "name"],
-                                        "data": [["36", "Jason"], ["49", "Alice"]],
-                                        "explanation": "Filtered rows where id is in (36, 49) and returned all matching rows."
+                                        "data": [
+                                            {
+                                            "header": ["id", "name"],
+                                            "data": [["36", "Jason"], ["49", "Alice"]],
+                                            "explanation": "Filtered rows where id is in (36, 49) and returned all matching rows."
+                                            }
+                                        ]
                                         }
-                                    ]
-                                    }
 
-                                    --------------------------------
+                                        --------------------------------
 
-                                    Now execute the given query on the provided dataset.
-                                    """},
-                    {"role": "user", "content": f"""
-                                    Return the results of the SQL query, using the dataset given below
-                                    SQL Query:
-                                    {p.sql}
+                                        Now execute the given query on the provided dataset.
+                                        """},
+                        {"role": "user", "content": f"""
+                                        Return the results of the SQL query, using the dataset given below
+                                        SQL Query:
+                                        {p.sql}
 
-                                    Dataset:
-                                    {text}
-                                    """
-                     }],
-                # response_format=Data,
-                api_base="http://host.docker.internal:11434"
-            )
-            print(response)
-            print("Received={}".format(response))
+                                        Dataset:
+                                        {chunk}
+                                        """
+                         }],
+                    # response_format=Data,
+                    api_base="http://host.docker.internal:11434"
+                )
+                print(response)
+                all_results.append(response)
+
+            print("Received={}".format(all_results))
             data_list = DataList.model_validate_json(
                 response.choices[0].message.content)
             assert (len(data_list.data) > 0)
