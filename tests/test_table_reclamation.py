@@ -1,3 +1,4 @@
+from functools import partial
 from multiprocessing import Pool, cpu_count
 from os import read
 from pathlib import Path
@@ -98,7 +99,8 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             num_pages = len(DocumentReader.pages)
 
             with Pool(cpu_count()) as pool:
-                results = pool.map(extract_page_text, range(num_pages))
+                func = partial(extract_page_text, file_path=file_path)
+                results = pool.map(func, range(num_pages))
             text = "".join(results)
 
             ############ tiktoken setup ############
