@@ -18,19 +18,47 @@ dotenv.load_dotenv()
 ################# For Tiktoken tokenizer #################
 
 
-def chunk_text(text, max_tokens=2000, overlap=200):
-    enc = tiktoken.get_encoding("cl100k_base")  # works fine for most LLMs
-    tokens = enc.encode(text)
+def chunk_with_header(text, max_tokens=1500, model="gpt-4"):
+    enc = tiktoken.encoding_for_model(model)
 
+    lines = text.split("\n")
+
+    header = None
     chunks = []
-    start = 0
+    current_chunk = []
+    current_tokens = 0
+    started = False  # ← controls when chunking begins
 
-    while start < len(tokens):
-        end = start + max_tokens
-        chunk = tokens[start:end]
-        chunks.append(enc.decode(chunk))
+    for line in lines:
+        if not line.strip():
+            continue
 
-        start += max_tokens - overlap  # overlap prevents cutting rows
+        # Detect header
+        if not started:
+            if "student_id" in line:  # replace with your detection logic if needed
+                header = line
+                started = True
+            continue  # ignore everything before header
+
+        # From here: only real table rows
+        row = line + "\n"
+        tokens = len(enc.encode(row))
+
+        if current_tokens + tokens > max_tokens:
+            if current_chunk:
+                chunk_text = header + "\n" + "".join(current_chunk)
+                chunks.append(chunk_text)
+
+            current_chunk = [row]
+            current_tokens = tokens
+        else:
+            current_chunk.append(row)
+            current_tokens += tokens
+
+    # Final chunk
+    if current_chunk:
+        chunk_text = header + "\n" + "".join(current_chunk)
+        chunks.append(chunk_text)
 
     return chunks
 
@@ -111,7 +139,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             # text = "".join(results)
 
             ############ Step2. tiktoken setup ############
-            chunks = chunk_text(text)
+            chunks = chunk_with_header(text)
             all_results = []
 
             start_time = time.time()
@@ -120,6 +148,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
                 response = completion(
                     model="ollama/gemma4:e4b",
+                    # enable the model to reason about the SQL execution steps, but not too much to avoid hallucination.
                     reasoning_effort="medium",
                     messages=[
                         {"role": "system", "content": """
@@ -245,7 +274,6 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                 all_results.append(response)
 
             execution_time = time.time() - start_time
-
             print(all_results)
             print("Received={}".format(all_results))
 
