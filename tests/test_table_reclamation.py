@@ -6,9 +6,11 @@ from os import read
 from pathlib import Path
 
 import dotenv
+import matplotlib.pyplot as plt
 import pytest
 import tiktoken
 from litellm import BaseModel, completion
+from matplotlib.ticker import ScalarFormatter
 from pypdf import PdfReader
 
 from table_reclamation.facade.table_reclamation import AccessPlanner
@@ -138,179 +140,238 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             #     results = pool.map(func, range(num_pages))
             # text = "".join(results)
 
+            # Testing with various context length (starting from 1 to doubling up to 128000) and plot the execution_time, hit_ratio, accuracy depending n the context length.
             ############ Step2. tiktoken setup ############
-            chunks = chunk_with_header(text)
-            all_results = []
+            context_sizes = [2**i for i in range(10, 18)]  # 1024 → 131072
+            context_sizes.extend([3072, 49152, 98304])
+            context_sizes.sort()
+            results_log = []
 
-            start_time = time.time()
-            for i, chunk in enumerate(chunks):
-                print(f"Processing chunk {i}/{len(chunks)}")
+            for context_size in context_sizes:
+                print(f"\n=== Testing context size: {context_size} ===")
 
-                response = completion(
-                    model="ollama/gemma4:e4b",
-                    # enable the model to reason about the SQL execution steps, but not too much to avoid hallucination.
-                    reasoning_effort="medium",
-                    messages=[
-                        {"role": "system", "content": """
-                            You are a deterministic SQL execution engine.
+                chunks = chunk_with_header(text, max_tokens=context_size)
+                all_results = []
 
-                            Your task:
-                            Execute the SQL query EXACTLY on the provided dataset.
+                start_time = time.time()
+                for i, chunk in enumerate(chunks):
+                    print(f"Processing chunk {i}/{len(chunks)}")
 
-                            --------------------------------
-                            STRICT RULES (MANDATORY)
-                            --------------------------------
+                    response = completion(
+                        model="ollama/gemma4:e4b",
+                        # enable the model to reason about the SQL execution steps, but not too much to avoid hallucination.
+                        reasoning_effort="medium",
+                        messages=[
+                            {"role": "system", "content": """
+                                You are a deterministic SQL execution engine.
 
-                            1. Output MUST be valid JSON only. No text before or after.
-                            2. Output MUST match EXACTLY this schema:
+                                Your task:
+                                Execute the SQL query EXACTLY on the provided dataset.
 
-                            {
-                            "header": ["column1", "..."],
-                            "data": [["value1", "..."]],
-                            "explanation": "short explanation"
-                            }
+                                --------------------------------
+                                STRICT RULES (MANDATORY)
+                                --------------------------------
 
-                            3. DO NOT wrap output in a list.
-                            4. DO NOT return multiple JSON objects.
-                            5. DO NOT repeat the query.
-                            6. DO NOT hallucinate values.
-                            7. ONLY return rows that EXACTLY match the WHERE condition.
-                            8. If NO rows match → return:
-                            "data": []
+                                1. Output MUST be valid JSON only. No text before or after.
+                                2. Output MUST match EXACTLY this schema:
 
-                            9. Each row in "data" MUST have the SAME number of columns as "header".
-                            10. NEVER return malformed rows (e.g., ["123"] if 2 columns expected).
+                                {
+                                "header": ["column1", "..."],
+                                "data": [["value1", "..."]],
+                                "explanation": "short explanation"
+                                }
 
-                            --------------------------------
-                            DATASET RULES
-                            --------------------------------
+                                3. DO NOT wrap output in a list.
+                                4. DO NOT return multiple JSON objects.
+                                5. DO NOT repeat the query.
+                                6. DO NOT hallucinate values.
+                                7. ONLY return rows that EXACTLY match the WHERE condition.
+                                8. If NO rows match → return:
+                                "data": []
 
-                            - Dataset is RAW TEXT (space-separated)
-                            - First line = column names
-                            - Each next line = one row
-                            - You MUST manually parse rows
-                            - Columns are separated by spaces
+                                9. Each row in "data" MUST have the SAME number of columns as "header".
+                                10. NEVER return malformed rows (e.g., ["123"] if 2 columns expected).
 
-                            --------------------------------
-                            SQL RULES
-                            --------------------------------
+                                --------------------------------
+                                DATASET RULES
+                                --------------------------------
 
-                            - Only use the provided dataset
-                            - Apply WHERE conditions strictly
-                            - SELECT only requested columns
-                            - DISTINCT = remove duplicates
+                                - Dataset is RAW TEXT (space-separated)
+                                - First line = column names
+                                - Each next line = one row
+                                - You MUST manually parse rows
+                                - Columns are separated by spaces
 
-                            --------------------------------
-                            EXAMPLES
-                            --------------------------------
+                                --------------------------------
+                                SQL RULES
+                                --------------------------------
 
-                            Example 1:
+                                - Only use the provided dataset
+                                - Apply WHERE conditions strictly
+                                - SELECT only requested columns
+                                - DISTINCT = remove duplicates
 
-                            SQL:
-                            SELECT id, name FROM table WHERE id IN ('36', '49');
+                                --------------------------------
+                                EXAMPLES
+                                --------------------------------
 
-                            Dataset:
-                            id name
-                            36 Jason
-                            49 Alice
-                            60 Bob
+                                Example 1:
 
-                            Output:
-                            {
-                            "header": ["id", "name"],
-                            "data": [["36", "Jason"], ["49", "Alice"]],
-                            "explanation": "Rows where id is 36 or 49."
-                            }
+                                SQL:
+                                SELECT id, name FROM table WHERE id IN ('36', '49');
 
-                            --------------------------------
+                                Dataset:
+                                id name
+                                36 Jason
+                                49 Alice
+                                60 Bob
 
-                            Example 2:
+                                Output:
+                                {
+                                "header": ["id", "name"],
+                                "data": [["36", "Jason"], ["49", "Alice"]],
+                                "explanation": "Rows where id is 36 or 49."
+                                }
 
-                            SQL:
-                            SELECT id, name FROM table WHERE id = '10';
+                                --------------------------------
 
-                            Dataset:
-                            id name
-                            36 Jason
-                            49 Alice
-                            60 Bob
+                                Example 2:
 
-                            Output:
-                            {
-                            "header": ["id", "name"],
-                            "data": [],
-                            "explanation": "No matching rows found."
-                            }
+                                SQL:
+                                SELECT id, name FROM table WHERE id = '10';
 
-                            --------------------------------
+                                Dataset:
+                                id name
+                                36 Jason
+                                49 Alice
+                                60 Bob
 
-                            IMPORTANT FINAL CHECK (before answering):
+                                Output:
+                                {
+                                "header": ["id", "name"],
+                                "data": [],
+                                "explanation": "No matching rows found."
+                                }
 
-                            - Is JSON valid? ✔
-                            - Does each row match header length? ✔
-                            - Any hallucinated values? ✘
-                            - Any partial matches? ✘
+                                --------------------------------
 
-                            If any rule is violated → FIX before returning.
+                                IMPORTANT FINAL CHECK (before answering):
 
-                            --------------------------------
-                            Now execute the query.
-                            """},
-                        {"role": "user", "content": f"""
-                            DATASET:
-                            {chunk}
+                                - Is JSON valid? ✔
+                                - Does each row match header length? ✔
+                                - Any hallucinated values? ✘
+                                - Any partial matches? ✘
 
-                            SQL QUERY:
-                            {p.sql}
+                                If any rule is violated → FIX before returning.
 
-                            Return ONLY the JSON.
-                            """
-                         }],
-                    response_format=Data,
-                    api_base="http://host.docker.internal:11434"
-                )
+                                --------------------------------
+                                Now execute the query.
+                                """},
+                            {"role": "user", "content": f"""
+                                DATASET:
+                                {chunk}
 
-                print(response)
-                all_results.append(response)
+                                SQL QUERY:
+                                {p.sql}
 
-            execution_time = time.time() - start_time
-            print(all_results)
-            print("Received={}".format(all_results))
+                                Return ONLY the JSON.
+                                """
+                             }],
+                        response_format=Data,
+                        api_base="http://host.docker.internal:11434"
+                    )
 
-            all_data = []
-            headers = None
+                    print(response)
+                    all_results.append(response)
 
-            for res in all_results:  # your list of ModelResponse
-                try:
-                    content = res.choices[0].message.content
-                    parsed = json.loads(content)
+                execution_time = time.time() - start_time
+                print(all_results)
+                print("Received={}".format(all_results))
 
-                    # Save header once
-                    if headers is None:
-                        headers = parsed.get("header", [])
+                all_data = []
+                headers = None
 
-                    # Aggregate rows
-                    all_data.extend(parsed.get("data", []))
+                for res in all_results:  # your list of ModelResponse
+                    try:
+                        content = res.choices[0].message.content
+                        parsed = json.loads(content)
 
-                except Exception as e:
-                    print("Skipping invalid response:", e)
+                        # Save header once
+                        if headers is None:
+                            headers = parsed.get("header", [])
 
-            result = {
-                "header": headers,
-                "data": all_data
-            }
-            # check if the result["data"] contains two elements and the expected student_id '3409'.
+                        # Aggregate rows
+                        all_data.extend(parsed.get("data", []))
 
-            hit = 0
-            for d in result["data"]:
-                if len(d) >= 2 and d[1] == '3409':
-                    hit += 1
-            expected = 11
-            accuracy = hit / expected
-            hit_ratio = expected / len(result["data"])
-            print(
-                f'Expected: {expected}, Hit: {hit}, Accuracy(vs Expected): {accuracy:.2%}, Hit ratio = {hit_ratio:.2%}')
-            print(result)
+                    except Exception as e:
+                        print("Skipping invalid response:", e)
+
+                result = {
+                    "header": headers,
+                    "data": all_data
+                }
+                # check if the result["data"] contains two elements and the expected student_id '3409'.
+
+                hit = 0
+                for d in result["data"]:
+                    if len(d) >= 2 and d[1] == '3409':
+                        hit += 1
+                expected = 11
+                accuracy = hit / expected if expected else 0
+                hit_ratio = hit / len(result["data"]) if result["data"] else 0
+
+                results_log.append({
+                    "context_size": context_size,
+                    "execution_time": execution_time,
+                    "accuracy": accuracy,
+                    "hit_ratio": hit_ratio,
+                    "num_chunks": len(chunks),
+                    "num_rows": len(result["data"]),
+                    "result": result
+                })
+
+            import matplotlib.pyplot as plt
+
+            sizes = [r["context_size"] for r in results_log]
+            times = [r["execution_time"] for r in results_log]
+            accuracy = [r["accuracy"] for r in results_log]
+            hit_ratio = [r["hit_ratio"] for r in results_log]
+
+            fig, ax1 = plt.subplots(figsize=(10, 6))
+
+            # Primary Y-axis: Execution Time
+            ax1.plot(sizes, times, color='tab:blue',
+                     marker='o', label='Execution Time (s)')
+            ax1.set_xlabel('Context Size')
+            ax1.set_ylabel('Execution Time (s)', color='tab:blue')
+            ax1.tick_params(axis='y', labelcolor='tab:blue')
+            ax1.set_xscale("log")
+            ax1.set_xticks(sizes)
+            ax1.xaxis.set_major_formatter(ScalarFormatter())
+            plt.xticks(rotation=45)
+
+            # Secondary Y-axis for Accuracy and Hit Ratio
+            ax2 = ax1.twinx()
+            ax2.plot(sizes, accuracy, color='tab:green',
+                     marker='s', label='Accuracy')
+            ax2.plot(sizes, hit_ratio, color='tab:red',
+                     marker='d', linestyle='--', label='Hit Ratio')
+            ax2.set_ylabel('Accuracy / Hit Ratio')
+
+            # Combine legends from both axes
+            lines_1, labels_1 = ax1.get_legend_handles_labels()
+            lines_2, labels_2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines_1 + lines_2, labels_1 +
+                       labels_2, loc='upper right')
+
+            plt.title("Execution Time, Accuracy, and Hit Ratio vs Context Size")
+            plt.grid(True, which="both", ls="-", alpha=0.3)
+            fig.tight_layout()
+            plt.show()
+
+            print(results_log)
+            plt.savefig("metrics_plot.png")
+            plt.close()
 
 
 def test_litellm():
@@ -321,3 +382,14 @@ def test_litellm():
         api_base="http://host.docker.internal:11434"
     )
     print(response)
+
+
+# results_log = [
+# {'context_size': 1024, 'execution_time': 229.37085103988647, 'accuracy': 1.0, 'hit_ratio': 1.0, 'num_chunks': 63, 'num_rows': 11},
+# {'context_size': 2048, 'execution_time': 166.96095371246338, 'accuracy': 1.0909090909090908, 'hit_ratio': 1.0, 'num_chunks': 31, 'num_rows': 12},
+# {'context_size': 4096, 'execution_time': 127.35845589637756, 'accuracy': 0.09090909090909091, 'hit_ratio': 0.2, 'num_chunks': 16, 'num_rows': 5},
+# {'context_size': 8192, 'execution_time': 67.50510740280151, 'accuracy': 0.0, 'hit_ratio': 0, 'num_chunks': 8, 'num_rows': 0},
+# {'context_size': 16384, 'execution_time': 34.29264163970947, 'accuracy': 0.0, 'hit_ratio': 0.0, 'num_chunks': 4, 'num_rows': 1},
+# {'context_size': 32768, 'execution_time': 16.155858993530273, 'accuracy': 0.0, 'hit_ratio': 0, 'num_chunks': 2, 'num_rows': 0},
+# {'context_size': 65536, 'execution_time': 9.332051038742065, 'accuracy': 0.09090909090909091, 'hit_ratio': 1.0, 'num_chunks': 1, 'num_rows': 1},
+# {'context_size': 131072, 'execution_time': 8.21578073501587, 'accuracy': 0.09090909090909091, 'hit_ratio': 1.0, 'num_chunks': 1, 'num_rows': 1}]

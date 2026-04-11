@@ -9,6 +9,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "duckdb>=1.4.4",
     "litellm>=1.82.4",
+    "matplotlib>=3.10.8",
     "pandas>=2.3.3",
     "pyarrow>=23.0.1",
     "pydantic>=2.12.5",
