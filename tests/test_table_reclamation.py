@@ -20,7 +20,7 @@ dotenv.load_dotenv()
 ################# For Tiktoken tokenizer #################
 
 
-def chunk_with_header(text, max_tokens=1500, model="gpt-4"):
+def chunk_with_header(text, max_tokens, model="gpt-4"):
     enc = tiktoken.encoding_for_model(model)
 
     lines = text.split("\n")
@@ -131,6 +131,20 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             for i in range(len(DocumentReader.pages)):
                 text += DocumentReader.pages[i].extract_text()
 
+            # Optional: CSV
+            # import csv
+            # from pathlib import Path
+
+            # file_path = Path(
+            #     "/workspaces/Table-Reclamation-Demo/data/mathe_splitted/mathe.assessment_10.csv")
+
+            # text = ""
+            # with open(file_path, mode='r', encoding='utf-8') as f:
+            #     reader = csv.reader(f)
+            #     for row in reader:
+            #         # Join all columns in the row with a space, then add a newline
+            #         text += " ".join(row) + "\n"
+
             ##### Option) MULTIPROCESSING PDF READING #####
             # DocumentReader = PdfReader(file_path)
             # num_pages = len(DocumentReader.pages)
@@ -142,8 +156,9 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
             # Testing with various context length (starting from 1 to doubling up to 128000) and plot the execution_time, hit_ratio, accuracy depending n the context length.
             ############ Step2. tiktoken setup ############
-            context_sizes = [2**i for i in range(10, 18)]  # 1024 → 131072
-            context_sizes.extend([3072, 49152, 98304])
+            context_sizes = [2**i for i in range(12, 13)]  # 1024 → 131072
+            # context_sizes.extend([98304])
+            # context_sizes.extend([72100, 81920, 90000, 98304, 104857, 114688])
             context_sizes.sort()
             results_log = []
 
@@ -158,9 +173,9 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     print(f"Processing chunk {i}/{len(chunks)}")
 
                     response = completion(
-                        model="ollama/gemma4:e4b",
+                        model="ollama/gemma4:26b",
                         # enable the model to reason about the SQL execution steps, but not too much to avoid hallucination.
-                        reasoning_effort="medium",
+                        # reasoning_effort="medium",
                         messages=[
                             {"role": "system", "content": """
                                 You are a deterministic SQL execution engine.
@@ -331,7 +346,9 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                 })
 
             import matplotlib.pyplot as plt
+            from matplotlib.ticker import ScalarFormatter
 
+            # (Assuming results_log is defined here)
             sizes = [r["context_size"] for r in results_log]
             times = [r["execution_time"] for r in results_log]
             accuracy = [r["accuracy"] for r in results_log]
@@ -345,10 +362,19 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             ax1.set_xlabel('Context Size')
             ax1.set_ylabel('Execution Time (s)', color='tab:blue')
             ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+            # --- X-Axis Formatting ---
             ax1.set_xscale("log")
             ax1.set_xticks(sizes)
-            ax1.xaxis.set_major_formatter(ScalarFormatter())
-            plt.xticks(rotation=45)
+
+            # 2. Apply the formatter and disable scientific notation
+            formatter = ScalarFormatter()
+            formatter.set_scientific(False)
+            ax1.xaxis.set_major_formatter(formatter)
+
+            # 3. Use ax1 instead of plt for rotation to keep it attached to this specific axis
+            ax1.tick_params(axis='x', rotation=45)
+            # -------------------------
 
             # Secondary Y-axis for Accuracy and Hit Ratio
             ax2 = ax1.twinx()
@@ -367,16 +393,16 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             plt.title("Execution Time, Accuracy, and Hit Ratio vs Context Size")
             plt.grid(True, which="both", ls="-", alpha=0.3)
             fig.tight_layout()
-            plt.show()
 
-            print(results_log)
+            # Save and show
             plt.savefig("metrics_plot.png")
+            plt.show()
             plt.close()
 
 
 def test_litellm():
     response = completion(
-        model="ollama/gemma4:e4b",
+        model="ollama/gemma4:26b",
         messages=[
             {"content": "respond in 20 words. who are you?", "role": "user"}],
         api_base="http://host.docker.internal:11434"
