@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from functools import partial
 from multiprocessing import Pool, cpu_count
@@ -16,6 +17,7 @@ from pypdf import PdfReader
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
+MODEL = "ollama/gemma4:31b"
 
 ################# For Tiktoken tokenizer #################
 
@@ -156,7 +158,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
             # Testing with various context length (starting from 1 to doubling up to 128000) and plot the execution_time, hit_ratio, accuracy depending n the context length.
             ############ Step2. tiktoken setup ############
-            context_sizes = [2**i for i in range(12, 13)]  # 1024 → 131072
+            context_sizes = [2**i for i in range(10, 18)]  # 1024 → 131072
             # context_sizes.extend([98304])
             # context_sizes.extend([72100, 81920, 90000, 98304, 104857, 114688])
             context_sizes.sort()
@@ -173,7 +175,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     print(f"Processing chunk {i}/{len(chunks)}")
 
                     response = completion(
-                        model="ollama/gemma4:26b",
+                        model=MODEL,
                         # enable the model to reason about the SQL execution steps, but not too much to avoid hallucination.
                         # reasoning_effort="medium",
                         messages=[
@@ -293,7 +295,8 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                 """
                              }],
                         response_format=Data,
-                        api_base="http://host.docker.internal:11434"
+                        api_base="http://host.docker.internal:11434",
+                        timeout=3600
                     )
 
                     print(response)
@@ -344,6 +347,33 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     "num_rows": len(result["data"]),
                     "result": result
                 })
+
+            # --- START OF JSON EXPORT CODE ---
+            log_file_path = "logs"
+            existing_logs = {}
+
+            # 1. Read the existing logs if the file exists and is not empty
+            if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
+                try:
+                    with open(log_file_path, "r", encoding="utf-8") as f:
+                        existing_logs = json.load(f)
+                except json.JSONDecodeError:
+                    print(
+                        f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
+
+            # 2. Append to the model's list if it exists, otherwise create it
+            if MODEL in existing_logs:
+                # .extend() flattens the lists together so you have one continuous
+                # array of dictionaries for this specific model.
+                existing_logs[MODEL].extend(results_log)
+            else:
+                existing_logs[MODEL] = results_log
+
+            # 3. Write the updated dictionary back to the file
+            with open(log_file_path, "w", encoding="utf-8") as f:
+                json.dump(existing_logs, f, indent=4)
+
+            # --- END OF JSON EXPORT CODE ---
 
             import matplotlib.pyplot as plt
             from matplotlib.ticker import ScalarFormatter
@@ -402,20 +432,9 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
 def test_litellm():
     response = completion(
-        model="ollama/gemma4:26b",
+        model=MODEL,
         messages=[
             {"content": "respond in 20 words. who are you?", "role": "user"}],
         api_base="http://host.docker.internal:11434"
     )
     print(response)
-
-
-# results_log = [
-# {'context_size': 1024, 'execution_time': 229.37085103988647, 'accuracy': 1.0, 'hit_ratio': 1.0, 'num_chunks': 63, 'num_rows': 11},
-# {'context_size': 2048, 'execution_time': 166.96095371246338, 'accuracy': 1.0909090909090908, 'hit_ratio': 1.0, 'num_chunks': 31, 'num_rows': 12},
-# {'context_size': 4096, 'execution_time': 127.35845589637756, 'accuracy': 0.09090909090909091, 'hit_ratio': 0.2, 'num_chunks': 16, 'num_rows': 5},
-# {'context_size': 8192, 'execution_time': 67.50510740280151, 'accuracy': 0.0, 'hit_ratio': 0, 'num_chunks': 8, 'num_rows': 0},
-# {'context_size': 16384, 'execution_time': 34.29264163970947, 'accuracy': 0.0, 'hit_ratio': 0.0, 'num_chunks': 4, 'num_rows': 1},
-# {'context_size': 32768, 'execution_time': 16.155858993530273, 'accuracy': 0.0, 'hit_ratio': 0, 'num_chunks': 2, 'num_rows': 0},
-# {'context_size': 65536, 'execution_time': 9.332051038742065, 'accuracy': 0.09090909090909091, 'hit_ratio': 1.0, 'num_chunks': 1, 'num_rows': 1},
-# {'context_size': 131072, 'execution_time': 8.21578073501587, 'accuracy': 0.09090909090909091, 'hit_ratio': 1.0, 'num_chunks': 1, 'num_rows': 1}]
