@@ -31,7 +31,7 @@ def chunk_with_header(text, max_tokens, model="gpt-4"):
     chunks = []
     current_chunk = []
     current_tokens = 0
-    started = False  # ← controls when chunking begins
+    started = False  # controls when chunking begins
 
     for line in lines:
         if not line.strip():
@@ -104,28 +104,20 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
     print(plan)
 
     class Data(BaseModel):
-        # This is the column names of the sql query result.
         header: list[str]
-        # This is the result of the sql query.
         data: list[list[str]]
-        # explain why you got this result, and how you execute the SQL query.
         explanation: str
 
     class DataList(BaseModel):
         data: list[Data]
 
     for p in plan:
-        # TODO: returned UR from Fares' model has to contain the type either 'Document' or 'Query', for now I'm hardcoding it to 'Document' to test the LLM prompt.
         p.type = 'Document'
-        # added id to check for any hallucination from the model.
         p.sql = "SELECT id, student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')"
 
         if (p.type == 'Query'):
-            # TODO: Execute OP, but not my scope for now.
             pass
         elif (p.type == 'Document'):
-            # Pass the document & query to LLM.
-            ##### Step 1. Read Document (only PDF for now) #####
             file_path = Path(
                 "/workspaces/Table-Reclamation-Demo/data/mathe_splitted/mathe.assessment_10.pdf")
             DocumentReader = PdfReader(file_path)
@@ -133,34 +125,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             for i in range(len(DocumentReader.pages)):
                 text += DocumentReader.pages[i].extract_text()
 
-            # Optional: CSV
-            # import csv
-            # from pathlib import Path
-
-            # file_path = Path(
-            #     "/workspaces/Table-Reclamation-Demo/data/mathe_splitted/mathe.assessment_10.csv")
-
-            # text = ""
-            # with open(file_path, mode='r', encoding='utf-8') as f:
-            #     reader = csv.reader(f)
-            #     for row in reader:
-            #         # Join all columns in the row with a space, then add a newline
-            #         text += " ".join(row) + "\n"
-
-            ##### Option) MULTIPROCESSING PDF READING #####
-            # DocumentReader = PdfReader(file_path)
-            # num_pages = len(DocumentReader.pages)
-
-            # with Pool(cpu_count()) as pool:
-            #     func = partial(extract_page_text, file_path=file_path)
-            #     results = pool.map(func, range(num_pages))
-            # text = "".join(results)
-
-            # Testing with various context length (starting from 1 to doubling up to 128000) and plot the execution_time, hit_ratio, accuracy depending n the context length.
-            ############ Step2. tiktoken setup ############
-            context_sizes = [2**i for i in range(10, 18)]  # 1024 → 131072
-            # context_sizes.extend([98304])
-            # context_sizes.extend([72100, 81920, 90000, 98304, 104857, 114688])
+            context_sizes = [2**i for i in range(10, 18)]
             context_sizes.sort()
             results_log = []
 
@@ -176,8 +141,6 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
                     response = completion(
                         model=MODEL,
-                        # enable the model to reason about the SQL execution steps, but not too much to avoid hallucination.
-                        # reasoning_effort="medium",
                         messages=[
                             {"role": "system", "content": """
                                 You are a deterministic SQL execution engine.
@@ -227,62 +190,14 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                 - Apply WHERE conditions strictly
                                 - SELECT only requested columns
                                 - DISTINCT = remove duplicates
-
-                                --------------------------------
-                                EXAMPLES
-                                --------------------------------
-
-                                Example 1:
-
-                                SQL:
-                                SELECT id, name FROM table WHERE id IN ('36', '49');
-
-                                Dataset:
-                                id name
-                                36 Jason
-                                49 Alice
-                                60 Bob
-
-                                Output:
-                                {
-                                "header": ["id", "name"],
-                                "data": [["36", "Jason"], ["49", "Alice"]],
-                                "explanation": "Rows where id is 36 or 49."
-                                }
-
-                                --------------------------------
-
-                                Example 2:
-
-                                SQL:
-                                SELECT id, name FROM table WHERE id = '10';
-
-                                Dataset:
-                                id name
-                                36 Jason
-                                49 Alice
-                                60 Bob
-
-                                Output:
-                                {
-                                "header": ["id", "name"],
-                                "data": [],
-                                "explanation": "No matching rows found."
-                                }
-
-                                --------------------------------
-
+                                
                                 IMPORTANT FINAL CHECK (before answering):
-
                                 - Is JSON valid? ✔
                                 - Does each row match header length? ✔
                                 - Any hallucinated values? ✘
                                 - Any partial matches? ✘
 
                                 If any rule is violated → FIX before returning.
-
-                                --------------------------------
-                                Now execute the query.
                                 """},
                             {"role": "user", "content": f"""
                                 DATASET:
@@ -295,7 +210,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                 """
                              }],
                         response_format=Data,
-                        api_base="http://host.docker.internal:11434",
+                        api_base="http://host.docker.internal:11439",
                         timeout=3600
                     )
 
@@ -309,16 +224,14 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                 all_data = []
                 headers = None
 
-                for res in all_results:  # your list of ModelResponse
+                for res in all_results:
                     try:
                         content = res.choices[0].message.content
                         parsed = json.loads(content)
 
-                        # Save header once
                         if headers is None:
                             headers = parsed.get("header", [])
 
-                        # Aggregate rows
                         all_data.extend(parsed.get("data", []))
 
                     except Exception as e:
@@ -328,31 +241,66 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     "header": headers,
                     "data": all_data
                 }
-                # check if the result["data"] contains two elements and the expected student_id '3409'.
 
-                hit = 0
+                # ---------------------------------------------------------
+                # UPDATED CONFUSION MATRIX & METRICS LOGIC
+                # ---------------------------------------------------------
+
+                data_lines = [line for line in text.split(
+                    "\n") if line.strip() and "student_id" not in line]
+                total_dataset_rows = len(data_lines)
+
+                actual_p = 11  # Known expected positives for student_id '3409'
+                actual_n = max(0, total_dataset_rows - actual_p)
+
+                tp = 0
+                fp = 0
+
                 for d in result["data"]:
                     if len(d) >= 2 and d[1] == '3409':
-                        hit += 1
-                expected = 11
-                accuracy = hit / expected if expected else 0
-                hit_ratio = hit / len(result["data"]) if result["data"] else 0
+                        tp += 1
+                    else:
+                        fp += 1
+
+                fn = max(0, actual_p - tp)
+                tn = max(0, actual_n - fp)
+
+                # Advanced Metrics Calculations (with zero-division protection)
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+                fall_out = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+                f1_denominator = precision + recall
+                f1_score = 2 * (precision * recall) / \
+                    f1_denominator if f1_denominator > 0 else 0.0
+
+                total_population = tp + tn + fp + fn
+                accuracy = (tp + tn) / \
+                    total_population if total_population > 0 else 0.0
 
                 results_log.append({
                     "context_size": context_size,
                     "execution_time": execution_time,
-                    "accuracy": accuracy,
-                    "hit_ratio": hit_ratio,
+                    "TP": tp,
+                    "TN": tn,
+                    "FP": fp,
+                    "FN": fn,
+                    "Recall": recall,
+                    "Precision": precision,
+                    "Specificity": specificity,
+                    "Fall-out": fall_out,
+                    "F1-Score": f1_score,
+                    "Accuracy": accuracy,
                     "num_chunks": len(chunks),
                     "num_rows": len(result["data"]),
                     "result": result
                 })
 
             # --- START OF JSON EXPORT CODE ---
-            log_file_path = "logs"
+            log_file_path = "logs.json"
             existing_logs = {}
 
-            # 1. Read the existing logs if the file exists and is not empty
             if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
                 try:
                     with open(log_file_path, "r", encoding="utf-8") as f:
@@ -361,71 +309,54 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     print(
                         f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
 
-            # 2. Append to the model's list if it exists, otherwise create it
             if MODEL in existing_logs:
-                # .extend() flattens the lists together so you have one continuous
-                # array of dictionaries for this specific model.
                 existing_logs[MODEL].extend(results_log)
             else:
                 existing_logs[MODEL] = results_log
 
-            # 3. Write the updated dictionary back to the file
             with open(log_file_path, "w", encoding="utf-8") as f:
                 json.dump(existing_logs, f, indent=4)
-
             # --- END OF JSON EXPORT CODE ---
 
+            # --- START OF PRECISION-RECALL PLOT CODE ---
             import matplotlib.pyplot as plt
-            from matplotlib.ticker import ScalarFormatter
 
-            # (Assuming results_log is defined here)
+            # Extracting the correct lists for a PR Curve
+            recall_list = [r["Recall"] for r in results_log]
+            precision_list = [r["Precision"] for r in results_log]
             sizes = [r["context_size"] for r in results_log]
-            times = [r["execution_time"] for r in results_log]
-            accuracy = [r["accuracy"] for r in results_log]
-            hit_ratio = [r["hit_ratio"] for r in results_log]
 
-            fig, ax1 = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(10, 8))
 
-            # Primary Y-axis: Execution Time
-            ax1.plot(sizes, times, color='tab:blue',
-                     marker='o', label='Execution Time (s)')
-            ax1.set_xlabel('Context Size')
-            ax1.set_ylabel('Execution Time (s)', color='tab:blue')
-            ax1.tick_params(axis='y', labelcolor='tab:blue')
+            # Plot Precision-Recall trajectory over context sizes
+            ax.plot(recall_list, precision_list, marker='o', color='tab:purple',
+                    linestyle='-', label='Model Performance Trajectory')
 
-            # --- X-Axis Formatting ---
-            ax1.set_xscale("log")
-            ax1.set_xticks(sizes)
+            # Annotate each point with its context size for clarity
+            for i, txt in enumerate(sizes):
+                ax.annotate(f"{txt}",
+                            (recall_list[i], precision_list[i]),
+                            textcoords="offset points",
+                            xytext=(8, 8),
+                            ha='center',
+                            fontsize=9,
+                            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
 
-            # 2. Apply the formatter and disable scientific notation
-            formatter = ScalarFormatter()
-            formatter.set_scientific(False)
-            ax1.xaxis.set_major_formatter(formatter)
+            ax.set_title("Precision-Recall Space by Context Size")
+            ax.set_xlabel("Recall (True Positive Rate)")
+            ax.set_ylabel("Precision (Positive Predictive Value)")
 
-            # 3. Use ax1 instead of plt for rotation to keep it attached to this specific axis
-            ax1.tick_params(axis='x', rotation=45)
-            # -------------------------
+            # Pad the axes slightly so points don't sit on the edge
+            ax.set_xlim([-0.05, 1.05])
+            ax.set_ylim([-0.05, 1.05])
 
-            # Secondary Y-axis for Accuracy and Hit Ratio
-            ax2 = ax1.twinx()
-            ax2.plot(sizes, accuracy, color='tab:green',
-                     marker='s', label='Accuracy')
-            ax2.plot(sizes, hit_ratio, color='tab:red',
-                     marker='d', linestyle='--', label='Hit Ratio')
-            ax2.set_ylabel('Accuracy / Hit Ratio')
+            ax.grid(True, which="both", ls="--", alpha=0.5)
+            ax.legend(loc='lower left')
 
-            # Combine legends from both axes
-            lines_1, labels_1 = ax1.get_legend_handles_labels()
-            lines_2, labels_2 = ax2.get_legend_handles_labels()
-            ax1.legend(lines_1 + lines_2, labels_1 +
-                       labels_2, loc='upper right')
-
-            plt.title("Execution Time, Accuracy, and Hit Ratio vs Context Size")
-            plt.grid(True, which="both", ls="-", alpha=0.3)
             fig.tight_layout()
 
             # Save and show
-            plt.savefig("metrics_plot.png")
+            plt.savefig("pr_plot.png")
             plt.show()
             plt.close()
 
@@ -435,6 +366,6 @@ def test_litellm():
         model=MODEL,
         messages=[
             {"content": "respond in 20 words. who are you?", "role": "user"}],
-        api_base="http://host.docker.internal:11434"
+        api_base="http://host.docker.internal:11439"
     )
     print(response)
