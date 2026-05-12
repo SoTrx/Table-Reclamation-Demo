@@ -17,7 +17,8 @@ from pypdf import PdfReader
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
-MODEL = "ollama/gemma4:31b"
+# MODEL = "ollama/gemma4:31b"
+MODEL = "ollama/qwen3.6:35b"
 
 ################# For Tiktoken tokenizer #################
 
@@ -280,6 +281,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     total_population if total_population > 0 else 0.0
 
                 results_log.append({
+                    # "model": MODEL[7:],
                     "context_size": context_size,
                     "execution_time": execution_time,
                     "TP": tp,
@@ -356,7 +358,8 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             fig.tight_layout()
 
             # Save and show
-            plt.savefig("pr_plot.png")
+            plot_path = "pr_plot_"+MODEL[7:]+".png"
+            plt.savefig(plot_path)
             plt.show()
             plt.close()
 

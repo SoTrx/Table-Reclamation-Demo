@@ -544,5 +544,335 @@
                 ]
             }
         }
+    ],
+    "ollama/qwen3.6:35b": [
+        {
+            "context_size": 1024,
+            "execution_time": 166.10543012619019,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 63,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 2048,
+            "execution_time": 114.34957265853882,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 31,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 4096,
+            "execution_time": 90.18551659584045,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 16,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 8192,
+            "execution_time": 79.91758465766907,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 8,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 16384,
+            "execution_time": 71.73626518249512,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 4,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 32768,
+            "execution_time": 73.99810767173767,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 2,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 65536,
+            "execution_time": 64.40043640136719,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 1,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "context_size": 131072,
+            "execution_time": 277.9762005805969,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 1,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 1024,
+            "execution_time": 167.60403490066528,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 63,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 2048,
+            "execution_time": 109.52891826629639,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 31,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 4096,
+            "execution_time": 91.62779021263123,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 16,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 8192,
+            "execution_time": 80.2197618484497,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 8,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 16384,
+            "execution_time": 82.30326676368713,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 4,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 32768,
+            "execution_time": 67.35267758369446,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 2,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 65536,
+            "execution_time": 83.29110908508301,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 1,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        },
+        {
+            "model": "qwen3.6:35b",
+            "context_size": 131072,
+            "execution_time": 203.36207461357117,
+            "TP": 0,
+            "TN": 2030,
+            "FP": 0,
+            "FN": 11,
+            "Recall": 0.0,
+            "Precision": 0.0,
+            "Specificity": 1.0,
+            "Fall-out": 0.0,
+            "F1-Score": 0.0,
+            "Accuracy": 0.994610485056345,
+            "num_chunks": 1,
+            "num_rows": 0,
+            "result": {
+                "header": null,
+                "data": []
+            }
+        }
     ]
 }
