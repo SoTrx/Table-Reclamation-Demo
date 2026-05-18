@@ -14,11 +14,20 @@ from litellm import BaseModel, completion
 from matplotlib.ticker import ScalarFormatter
 from pypdf import PdfReader
 
+# --- adjustText IMPORT WITH GRACEFUL FALLBACK ---
+try:
+    from adjustText import adjust_text
+    HAS_ADJUST_TEXT = True
+except ImportError:
+    print("\n[INFO] 'adjustText' library not found. Labels in the plot may overlap.")
+    print("[INFO] To fix this, run: pip install adjustText\n")
+    HAS_ADJUST_TEXT = False
+# ------------------------------------------------
+
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
-# MODEL = "ollama/gemma4:31b"
-MODEL = "ollama/qwen3.6:35b"
+MODEL = "ollama/gemma4:31b"
 
 ################# For Tiktoken tokenizer #################
 
@@ -126,7 +135,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             for i in range(len(DocumentReader.pages)):
                 text += DocumentReader.pages[i].extract_text()
 
-            context_sizes = [2**i for i in range(10, 18)]
+            context_sizes = [2**i for i in range(15, 17)]
             context_sizes.sort()
             results_log = []
 
@@ -218,7 +227,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     print(response)
                     all_results.append(response)
 
-                execution_time = time.time() - start_time
+                walltime = time.time() - start_time
                 print(all_results)
                 print("Received={}".format(all_results))
 
@@ -244,7 +253,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                 }
 
                 # ---------------------------------------------------------
-                # UPDATED CONFUSION MATRIX & METRICS LOGIC
+                # CONFUSION MATRIX & METRICS LOGIC
                 # ---------------------------------------------------------
 
                 data_lines = [line for line in text.split(
@@ -281,9 +290,8 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     total_population if total_population > 0 else 0.0
 
                 results_log.append({
-                    # "model": MODEL[7:],
                     "context_size": context_size,
-                    "execution_time": execution_time,
+                    "walltime": walltime,
                     "TP": tp,
                     "TN": tn,
                     "FP": fp,
@@ -299,7 +307,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                     "result": result
                 })
 
-            # --- START OF JSON EXPORT CODE ---
+            # --- JSON EXPORT CODE ---
             log_file_path = "logs.json"
             existing_logs = {}
 
@@ -318,48 +326,74 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
             with open(log_file_path, "w", encoding="utf-8") as f:
                 json.dump(existing_logs, f, indent=4)
-            # --- END OF JSON EXPORT CODE ---
 
-            # --- START OF PRECISION-RECALL PLOT CODE ---
+            # --- PRECISION-RECALL PLOT CODE ---
             import matplotlib.pyplot as plt
 
-            # Extracting the correct lists for a PR Curve
             recall_list = [r["Recall"] for r in results_log]
             precision_list = [r["Precision"] for r in results_log]
             sizes = [r["context_size"] for r in results_log]
 
             fig, ax = plt.subplots(figsize=(10, 8))
 
-            # Plot Precision-Recall trajectory over context sizes
-            ax.plot(recall_list, precision_list, marker='o', color='tab:purple',
-                    linestyle='-', label='Model Performance Trajectory')
+            # 1. Plot the main trajectory line and points
+            ax.plot(
+                recall_list,
+                precision_list,
+                marker='o',
+                markersize=8,
+                color='tab:purple',
+                linestyle='-',
+                label='Model Performance Trajectory'
+            )
 
-            # Annotate each point with its context size for clarity
+            # 2. Collect all text annotation objects
+            texts = []
             for i, txt in enumerate(sizes):
-                ax.annotate(f"{txt}",
-                            (recall_list[i], precision_list[i]),
-                            textcoords="offset points",
-                            xytext=(8, 8),
-                            ha='center',
-                            fontsize=9,
-                            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+                texts.append(ax.annotate(
+                    f"{txt}",
+                    (recall_list[i], precision_list[i]),
+                    fontsize=9,
+                    bbox=dict(boxstyle="round,pad=0.3",
+                              fc="white", ec="gray", alpha=0.8)
+                ))
+
+            # 3. Perform the automatic label adjustment
+            if HAS_ADJUST_TEXT:
+                print(
+                    "[INFO] Adjusting labels to prevent overlap... this may take a moment.")
+                adjust_text(
+                    texts,
+                    x=recall_list,
+                    y=precision_list,
+                    expand_points=(2.0, 2.0),
+                    force_text=(0.3, 0.6),
+                    force_points=(0.2, 0.5),
+                    lim=500,
+                    arrowprops=dict(arrowstyle="->",
+                                    color='gray', lw=0.5, alpha=0.7)
+                )
+            else:
+                # Fallback if adjustText is not installed
+                for t in texts:
+                    t.set_va('center')
+                    t.set_ha('center')
 
             ax.set_title("Precision-Recall Space by Context Size")
             ax.set_xlabel("Recall (True Positive Rate)")
             ax.set_ylabel("Precision (Positive Predictive Value)")
 
-            # Pad the axes slightly so points don't sit on the edge
-            ax.set_xlim([-0.05, 1.05])
-            ax.set_ylim([-0.05, 1.05])
+            # Padding
+            ax.set_xlim([-0.08, 1.08])
+            ax.set_ylim([-0.08, 1.08])
 
             ax.grid(True, which="both", ls="--", alpha=0.5)
-            ax.legend(loc='lower left')
+            ax.legend(loc='upper right')
 
             fig.tight_layout()
 
             # Save and show
-            plot_path = "pr_plot_"+MODEL[7:]+".png"
-            plt.savefig(plot_path)
+            plt.savefig(f"pr_plot_{MODEL[7:]}.png")
             plt.show()
             plt.close()
 
