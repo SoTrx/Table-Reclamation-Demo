@@ -27,7 +27,8 @@ except ImportError:
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
-MODEL = "ollama/gemma4:31b"
+# MODEL = "ollama/gemma4:31b"
+MODEL = "ollama/lfm2:24b"
 
 ################# For Tiktoken tokenizer #################
 
@@ -135,7 +136,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             for i in range(len(DocumentReader.pages)):
                 text += DocumentReader.pages[i].extract_text()
 
-            context_sizes = [2**i for i in range(15, 17)]
+            context_sizes = [2**i for i in range(10, 18)]
             context_sizes.sort()
             results_log = []
 
@@ -221,7 +222,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                              }],
                         response_format=Data,
                         api_base="http://host.docker.internal:11439",
-                        timeout=3600
+                        timeout=7200
                     )
 
                     print(response)
