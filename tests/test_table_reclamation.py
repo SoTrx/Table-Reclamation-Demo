@@ -28,7 +28,8 @@ from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
 # MODEL = "ollama/gemma4:31b"
-MODEL = "ollama/lfm2:24b"
+MODEL = "ollama/qwen3.6:35b"
+MODELNAME = MODEL[7:]
 
 ################# For Tiktoken tokenizer #################
 
@@ -136,197 +137,207 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             for i in range(len(DocumentReader.pages)):
                 text += DocumentReader.pages[i].extract_text()
 
-            context_sizes = [2**i for i in range(10, 18)]
-            context_sizes.sort()
-            results_log = []
+            for i in range(30):  # Repetitive execution for Whisker plot
+                context_sizes = [2**i for i in range(10, 18)]
+                context_sizes.sort()
+                results_log = []
 
-            for context_size in context_sizes:
-                print(f"\n=== Testing context size: {context_size} ===")
+                for context_size in context_sizes:
+                    print(f"\n=== Testing context size: {context_size} ===")
 
-                chunks = chunk_with_header(text, max_tokens=context_size)
-                all_results = []
+                    chunks = chunk_with_header(text, max_tokens=context_size)
+                    all_results = []
 
-                start_time = time.time()
-                for i, chunk in enumerate(chunks):
-                    print(f"Processing chunk {i}/{len(chunks)}")
+                    start_time = time.time()
+                    for i, chunk in enumerate(chunks):
+                        print(f"Processing chunk {i}/{len(chunks)}")
 
-                    response = completion(
-                        model=MODEL,
-                        messages=[
-                            {"role": "system", "content": """
-                                You are a deterministic SQL execution engine.
+                        response = completion(
+                            model=MODEL,
+                            messages=[
+                                {"role": "system", "content": """
+                                    You are a deterministic SQL execution engine.
 
-                                Your task:
-                                Execute the SQL query EXACTLY on the provided dataset.
+                                    Your task:
+                                    Execute the SQL query EXACTLY on the provided dataset.
 
-                                --------------------------------
-                                STRICT RULES (MANDATORY)
-                                --------------------------------
+                                    --------------------------------
+                                    STRICT RULES (MANDATORY)
+                                    --------------------------------
 
-                                1. Output MUST be valid JSON only. No text before or after.
-                                2. Output MUST match EXACTLY this schema:
+                                    1. Output MUST be valid JSON only. No text before or after.
+                                    2. Output MUST match EXACTLY this schema:
 
-                                {
-                                "header": ["column1", "..."],
-                                "data": [["value1", "..."]],
-                                "explanation": "short explanation"
-                                }
+                                    {
+                                    "header": ["column1", "..."],
+                                    "data": [["value1", "..."]],
+                                    "explanation": "short explanation"
+                                    }
 
-                                3. DO NOT wrap output in a list.
-                                4. DO NOT return multiple JSON objects.
-                                5. DO NOT repeat the query.
-                                6. DO NOT hallucinate values.
-                                7. ONLY return rows that EXACTLY match the WHERE condition.
-                                8. If NO rows match → return:
-                                "data": []
+                                    3. DO NOT wrap output in a list.
+                                    4. DO NOT return multiple JSON objects.
+                                    5. DO NOT repeat the query.
+                                    6. DO NOT hallucinate values.
+                                    7. ONLY return rows that EXACTLY match the WHERE condition.
+                                    8. If NO rows match → return:
+                                    "data": []
 
-                                9. Each row in "data" MUST have the SAME number of columns as "header".
-                                10. NEVER return malformed rows (e.g., ["123"] if 2 columns expected).
+                                    9. Each row in "data" MUST have the SAME number of columns as "header".
+                                    10. NEVER return malformed rows (e.g., ["123"] if 2 columns expcted).
 
-                                --------------------------------
-                                DATASET RULES
-                                --------------------------------
+                                    --------------------------------
+                                    DATASET RULES
+                                    --------------------------------
 
-                                - Dataset is RAW TEXT (space-separated)
-                                - First line = column names
-                                - Each next line = one row
-                                - You MUST manually parse rows
-                                - Columns are separated by spaces
+                                    - Dataset is RAW TEXT (space-separated)
+                                    - First line = column names
+                                    - Each next line = one row
+                                    - You MUST manually parse rows
+                                    - Columns are separated by spaces
 
-                                --------------------------------
-                                SQL RULES
-                                --------------------------------
+                                    --------------------------------
+                                    SQL RULES
+                                    --------------------------------
 
-                                - Only use the provided dataset
-                                - Apply WHERE conditions strictly
-                                - SELECT only requested columns
-                                - DISTINCT = remove duplicates
-                                
-                                IMPORTANT FINAL CHECK (before answering):
-                                - Is JSON valid? ✔
-                                - Does each row match header length? ✔
-                                - Any hallucinated values? ✘
-                                - Any partial matches? ✘
+                                    - Only use the provided dataset
+                                    - Apply WHERE conditions strictly
+                                    - SELECT only requested columns
+                                    - DISTINCT = remove duplicates
+                                    
+                                    IMPORTANT FINAL CHECK (before answering):
+                                    - Is JSON valid? ✔
+                                    - Does each row match header length? ✔
+                                    - Any hallucinated values? ✘
+                                    - Any partial matches? ✘
 
-                                If any rule is violated → FIX before returning.
-                                """},
-                            {"role": "user", "content": f"""
-                                DATASET:
-                                {chunk}
+                                    If any rule is violated → FIX before returning.
+                                    """},
+                                {"role": "user", "content": f"""
+                                    DATASET:
+                                    {chunk}
 
-                                SQL QUERY:
-                                {p.sql}
+                                    SQL QUERY:
+                                    {p.sql}
 
-                                Return ONLY the JSON.
-                                """
-                             }],
-                        response_format=Data,
-                        api_base="http://host.docker.internal:11439",
-                        timeout=7200
-                    )
+                                    Return ONLY the JSON.
+                                    """
+                                 }],
+                            response_format=Data,
+                            api_base="http://host.docker.internal:11439",
+                            timeout=7200,
+                            # stream=False,
+                            # extra_body={
+                            #     "options": {
+                            #         "multi_token_prediction": False,
+                            #         "temperature": 0,
+                            #         # "num_predict": 512
+                            #     }
+                            # }
+                        )
 
-                    print(response)
-                    all_results.append(response)
+                        print(response)
+                        all_results.append(response)
 
-                walltime = time.time() - start_time
-                print(all_results)
-                print("Received={}".format(all_results))
+                    walltime = time.time() - start_time
+                    print(all_results)
+                    print("Received={}".format(all_results))
 
-                all_data = []
-                headers = None
+                    all_data = []
+                    headers = None
 
-                for res in all_results:
+                    for res in all_results:
+                        try:
+                            content = res.choices[0].message.content
+                            parsed = json.loads(content)
+
+                            if headers is None:
+                                headers = parsed.get("header", [])
+
+                            all_data.extend(parsed.get("data", []))
+
+                        except Exception as e:
+                            print("Skipping invalid response:", e)
+
+                    result = {
+                        "header": headers,
+                        "data": all_data
+                    }
+
+                    # ---------------------------------------------------------
+                    # CONFUSION MATRIX & METRICS LOGIC
+                    # ---------------------------------------------------------
+
+                    data_lines = [line for line in text.split(
+                        "\n") if line.strip() and "student_id" not in line]
+                    total_dataset_rows = len(data_lines)
+
+                    actual_p = 100  # Known expected positives for student_id '3409'
+                    actual_n = max(0, total_dataset_rows - actual_p)
+
+                    tp = 0
+                    fp = 0
+
+                    for d in result["data"]:
+                        # Check if row has at least 2 elements, first element is in valid_ids, and second is 3409
+                        if len(d) >= 2 and str(d[1]) == '3409':
+                            tp += 1
+                        else:
+                            fp += 1
+
+                    fn = max(0, actual_p - tp)
+                    tn = max(0, actual_n - fp)
+
+                    # Advanced Metrics Calculations (with zero-division protection)
+                    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+                    fall_out = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+                    f1_denominator = precision + recall
+                    f1_score = 2 * (precision * recall) / \
+                        f1_denominator if f1_denominator > 0 else 0.0
+
+                    total_population = tp + tn + fp + fn
+                    accuracy = (tp + tn) / \
+                        total_population if total_population > 0 else 0.0
+
+                    results_log.append({
+                        "context_size": context_size,
+                        "walltime": walltime,
+                        "TP": tp,
+                        "TN": tn,
+                        "FP": fp,
+                        "FN": fn,
+                        "Recall": recall,
+                        "Precision": precision,
+                        "Specificity": specificity,
+                        "Fall-out": fall_out,
+                        "F1-Score": f1_score,
+                        "Accuracy": accuracy,
+                        "num_chunks": len(chunks),
+                        "num_rows": len(result["data"]),
+                        "result": result
+                    })
+
+                # --- JSON EXPORT CODE ---
+                log_file_path = "logs.json"
+                existing_logs = {}
+
+                if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
                     try:
-                        content = res.choices[0].message.content
-                        parsed = json.loads(content)
+                        with open(log_file_path, "r", encoding="utf-8") as f:
+                            existing_logs = json.load(f)
+                    except json.JSONDecodeError:
+                        print(
+                            f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
 
-                        if headers is None:
-                            headers = parsed.get("header", [])
+                if MODELNAME in existing_logs:
+                    existing_logs[MODELNAME].extend(results_log)
+                else:
+                    existing_logs[MODELNAME] = results_log
 
-                        all_data.extend(parsed.get("data", []))
-
-                    except Exception as e:
-                        print("Skipping invalid response:", e)
-
-                result = {
-                    "header": headers,
-                    "data": all_data
-                }
-
-                # ---------------------------------------------------------
-                # CONFUSION MATRIX & METRICS LOGIC
-                # ---------------------------------------------------------
-
-                data_lines = [line for line in text.split(
-                    "\n") if line.strip() and "student_id" not in line]
-                total_dataset_rows = len(data_lines)
-
-                actual_p = 11  # Known expected positives for student_id '3409'
-                actual_n = max(0, total_dataset_rows - actual_p)
-
-                tp = 0
-                fp = 0
-
-                for d in result["data"]:
-                    if len(d) >= 2 and d[1] == '3409':
-                        tp += 1
-                    else:
-                        fp += 1
-
-                fn = max(0, actual_p - tp)
-                tn = max(0, actual_n - fp)
-
-                # Advanced Metrics Calculations (with zero-division protection)
-                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-                fall_out = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-
-                f1_denominator = precision + recall
-                f1_score = 2 * (precision * recall) / \
-                    f1_denominator if f1_denominator > 0 else 0.0
-
-                total_population = tp + tn + fp + fn
-                accuracy = (tp + tn) / \
-                    total_population if total_population > 0 else 0.0
-
-                results_log.append({
-                    "context_size": context_size,
-                    "walltime": walltime,
-                    "TP": tp,
-                    "TN": tn,
-                    "FP": fp,
-                    "FN": fn,
-                    "Recall": recall,
-                    "Precision": precision,
-                    "Specificity": specificity,
-                    "Fall-out": fall_out,
-                    "F1-Score": f1_score,
-                    "Accuracy": accuracy,
-                    "num_chunks": len(chunks),
-                    "num_rows": len(result["data"]),
-                    "result": result
-                })
-
-            # --- JSON EXPORT CODE ---
-            log_file_path = "logs.json"
-            existing_logs = {}
-
-            if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
-                try:
-                    with open(log_file_path, "r", encoding="utf-8") as f:
-                        existing_logs = json.load(f)
-                except json.JSONDecodeError:
-                    print(
-                        f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
-
-            if MODEL in existing_logs:
-                existing_logs[MODEL].extend(results_log)
-            else:
-                existing_logs[MODEL] = results_log
-
-            with open(log_file_path, "w", encoding="utf-8") as f:
-                json.dump(existing_logs, f, indent=4)
+                with open(log_file_path, "w", encoding="utf-8") as f:
+                    json.dump(existing_logs, f, indent=4)
 
             # --- PRECISION-RECALL PLOT CODE ---
             import matplotlib.pyplot as plt
@@ -394,7 +405,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
             fig.tight_layout()
 
             # Save and show
-            plt.savefig(f"pr_plot_{MODEL[7:]}.png")
+            plt.savefig(f"pr_plot_{MODELNAME}.png")
             plt.show()
             plt.close()
 
