@@ -10,7 +10,7 @@ import dotenv
 import matplotlib.pyplot as plt
 import pytest
 import tiktoken
-from litellm import BaseModel, completion
+from litellm import BaseModel, completion, embedding
 from matplotlib.ticker import ScalarFormatter
 from pypdf import PdfReader
 
@@ -222,7 +222,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                     Return ONLY the JSON.
                                     """
                                  }],
-                            response_format=Data,
+                            # response_format=Data,
                             api_base="http://host.docker.internal:11439",
                             timeout=7200,
                             # stream=False,
@@ -416,5 +416,15 @@ def test_litellm():
         messages=[
             {"content": "respond in 20 words. who are you?", "role": "user"}],
         api_base="http://host.docker.internal:11439"
+    )
+    print(response)
+
+
+def test_embedding():
+    response = embedding(
+        model="ollama/embeddinggemma:300m",
+        input=['''What's the best snack in summer?
+        '''],
+        api_base="http://host.docker.internal:11434"
     )
     print(response)

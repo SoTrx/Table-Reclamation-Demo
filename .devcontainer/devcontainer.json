@@ -1,12 +1,17 @@
 {
     "name": "WP3.3 - AP Management",
-    "image": "mcr.microsoft.com/devcontainers/python:3.14",
+    // "image": "mcr.microsoft.com/devcontainers/python:3.14",
+    "dockerComposeFile": ["docker-compose.yml"],
+    "service": "app",
     "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
     "features": {
         "ghcr.io/devcontainers-extra/features/uv:1": {},
         "ghcr.io/devcontainers-extra/features/ruff:1": {},
         "ghcr.io/devcontainers/features/docker-in-docker:2": {
             "moby": false
+        },
+         "ghcr.io/devcontainers-extra/features/apt-packages:1": {
+            "packages": "postgresql-client"
         }
     },
     "customizations": {
@@ -22,7 +27,8 @@
                 "ms-python.debugpy",
                 "yzhang.markdown-all-in-one",
                 "neo4j-extensions.neo4j-for-vscode",
-                "redhat.vscode-yaml"
+                "redhat.vscode-yaml",
+                "ms-ossdata.vscode-pgsql"
             ],
             "settings": {
                 "editor.defaultFormatter": "charliermarsh.ruff",
