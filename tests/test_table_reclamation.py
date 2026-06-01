@@ -30,8 +30,8 @@ from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
 # MODEL = "ollama/qwen3.6:35b" #Don't forget to toggle off structured output.
-MODEL = "ollama/gemma4:31b"
-# MODEL = "ollama/qwen3.5:122b"
+# MODEL = "ollama/gemma4:31b"
+MODEL = "ollama/qwen3.5:122b"
 
 GPU = "H100"
 
@@ -165,6 +165,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                             model=MODEL,
                             messages=[
                                 {"role": "system", "content": """
+                                    /no_think 
                                     You are a deterministic SQL execution engine.
 
                                     Your task:
@@ -231,7 +232,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                     Return ONLY the JSON.
                                     """
                                  }],
-                            response_format=Data,
+                            # response_format=Data,
                             api_base="http://host.docker.internal:11434",
                             timeout=7200,
                             # stream=False,
@@ -437,42 +438,10 @@ def test_embedding():
 
     # 1. Connect to the local PostgreSQL instance
     # TODO: set config/env
-    conn_info = "dbname=postgres user=postgres password=password host=db_rag port=5432"
+    conn_info = "dbname=rag user=postgres password=password host=db_rag port=5432"
 
     with psycopg.connect(conn_info) as conn:
         print(f"Connection Status: {conn.info.status}")
-
-        # 2. Register the vector type with the connection
-        with conn.cursor() as cur:
-            # cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-
-            cur.execute("SELECT current_database();")
-            actual_db = cur.fetchone()[0]
-            print(f"\n👉 ACTUAL DATABASE NAME BEING USED: {actual_db}")
-
-            # 1. Check ALL tables across ALL schemas (including system internal ones)
-            cur.execute("""
-                SELECT table_schema, table_name 
-                FROM information_schema.tables 
-                ORDER BY table_schema, table_name;
-            """)
-            all_tables = cur.fetchall()
-
-            print("\n--- System & User Tables Found ---")
-            if not all_tables:
-                print("Absolute zero tables found anywhere in the cluster.")
-            else:
-                for schema, name in all_tables:
-                    # Highlight user-created tables, mute system ones
-                    if schema not in ['pg_catalog', 'information_schema']:
-                        print(f"⭐ FOUND USER TABLE: {schema}.{name}")
-                    else:
-                        # Just print a count or sample of system tables so we know it's alive
-                        pass
-                print(f"Total system/internal tables found: {all_tables}")
-                print("test")
-
-        register_vector(conn)
 
         with conn.cursor() as cur:
             # Define your embedding as a standard Python list of floats
@@ -484,11 +453,13 @@ def test_embedding():
             print(response)
 
             embeddings = response.data[0]["embedding"]
+            print(embeddings)
 
             # 3. Execute the query using placeholders %s for safety
             query = """
-                SELECT name, embedding <-> %s 
+                SELECT * 
                 FROM items 
+                ORDER BY embedding <-> %s::vector 
                 LIMIT 1;
             """
 
