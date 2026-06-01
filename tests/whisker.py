@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-# MODEL = "gemma4:31b"
-MODEL = "qwen3.6:35b"
+MODEL = "gemma4:31b"
+# MODEL = "qwen3.6:35b"
 
 
 def create_whisker_plots(json_filepath):
@@ -68,4 +68,4 @@ def create_whisker_plots(json_filepath):
 
 if __name__ == "__main__":
     # Ensure you have saved your JSON data into a file named 'data.json'
-    create_whisker_plots('../logs.json')
+    create_whisker_plots('logs.json')

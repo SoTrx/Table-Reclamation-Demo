@@ -43,6 +43,13 @@
                     "**/*.pyc": true,
                     "**/*.pyo": true,
                     "**/.pytest_cache": true
+                },
+                "python.terminal.activateEnvInTerminal": true,
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "bash",
+                        "args": ["-l"]
+                    }
                 }
             }
         }
