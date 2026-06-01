@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from functools import partial
 from multiprocessing import Pool, cpu_count
@@ -30,8 +31,8 @@ from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
 # MODEL = "ollama/qwen3.6:35b" #Don't forget to toggle off structured output.
-# MODEL = "ollama/gemma4:31b"
-MODEL = "ollama/qwen3.5:122b"
+MODEL = "ollama/gemma4:31b"
+# MODEL = "ollama/qwen3.5:122b"
 
 GPU = "H100"
 
@@ -85,6 +86,41 @@ def chunk_with_header(text, max_tokens, model="gpt-4"):
 
     return chunks
 
+
+def chunk_without_header(text, max_tokens, model="gpt-4"):
+    enc = tiktoken.encoding_for_model(model)
+
+    lines = text.split("\n")
+
+    # header = None
+    chunks = []
+    current_chunk = []
+    current_tokens = 0
+    # started = False  # controls when chunking begins
+
+    for line in lines:
+        if not line.strip():
+            continue
+
+        row = line + "\n"
+        tokens = len(enc.encode(row))
+
+        if current_tokens + tokens > max_tokens:
+            if current_chunk:
+                chunks.append(current_chunk)
+
+            current_chunk = [row]
+            current_tokens = tokens
+        else:
+            current_chunk.append(row)
+            current_tokens += tokens
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks
+
+
 ############## PDF text extract in parallel #############
 
 
@@ -104,7 +140,7 @@ QUESTIONS = [
     "What is the role of the objective function in finding the optimum solution in a linear optimization problem?",
     "What is the role of constraints in a linear optimization problem?",
     "How is the optimal solution usually found in a linear optimization problem?",
-    "Fetch the assessments of student number 1273 and student number 3409",
+    "Fetch the assessments of student number 1273 and student number 3409",  # 2 SQL Sequences
 ]
 
 
@@ -132,19 +168,36 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
 
     for p in plan:
         p.type = 'Document'
-        p.sql = "SELECT id, student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')"
+        # p.sql = "SELECT id, student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')"
 
-        if (p.type == 'Query'):
+        if p.type == 'Query':
             pass
-        elif (p.type == 'Document'):
-            file_path = Path(
-                "/workspaces/Table-Reclamation-Demo/data/mathe_splitted/mathe.assessment_10.pdf")
-            DocumentReader = PdfReader(file_path)
-            text = ""
-            for i in range(len(DocumentReader.pages)):
-                text += DocumentReader.pages[i].extract_text()
+        elif p.type == 'Document':
+            # 1. Use regex to find the word immediately following 'FROM'
+            # [^\s]+ matches any character that isn't a space (the table name)
+            match = re.search(r"FROM\s+([^\s]+)", p.sql, re.IGNORECASE)
+            print(match)
+            if match:
+                table_name = match.group(1)
 
-            for i in range(500):  # Repetitive execution for Whisker plot
+                # 2. Dynamically construct the file path using f-strings
+                base_dir = Path(
+                    "/workspaces/Table-Reclamation-Demo/data/mathe_splitted")
+                file_path = base_dir / f"{table_name}.pdf"
+
+                # 3. Process the file if it exists
+                if file_path.exists():
+                    DocumentReader = PdfReader(file_path)
+                    text = ""
+                    for i in range(len(DocumentReader.pages)):
+                        text += DocumentReader.pages[i].extract_text()
+                else:
+                    print(f"Error: File not found at {file_path}")
+            else:
+                print(
+                    "Error: Could not find a table name after 'FROM' in the SQL query.")
+
+            for i in range(100):  # Repetitive execution for Whisker plot
                 # more precise check around 1K~4K tokens
                 context_sizes = [
                     2**i for i in range(10, 18)] + [512, 1536, 2560, 3072, 3584, 4608]
@@ -154,7 +207,8 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                 for context_size in context_sizes:
                     print(f"\n=== Testing context size: {context_size} ===")
 
-                    chunks = chunk_with_header(text, max_tokens=context_size)
+                    chunks = chunk_without_header(
+                        text, max_tokens=context_size)
                     all_results = []
 
                     start_time = time.time()
@@ -165,7 +219,6 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                             model=MODEL,
                             messages=[
                                 {"role": "system", "content": """
-                                    /no_think 
                                     You are a deterministic SQL execution engine.
 
                                     Your task:
@@ -232,7 +285,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                     Return ONLY the JSON.
                                     """
                                  }],
-                            # response_format=Data,
+                            response_format=Data,
                             api_base="http://host.docker.internal:11434",
                             timeout=7200,
                             # stream=False,
@@ -471,3 +524,287 @@ def test_embedding():
                 name, distance = result
                 print(f"Nearest Match: {name}")
                 print(f"Distance: {distance}")
+
+
+@pytest.mark.parametrize("question", QUESTIONS)
+def test_generate_prompt_case2_prejoin(planner_mathe_split: AccessPlanner, question: str):
+    planner_mathe_split.generate_stats()
+    plan = planner_mathe_split.generate_plan(question)
+    print(plan)
+
+    class Data(BaseModel):
+        header: list[str]
+        data: list[list[str]]
+        explanation: str
+
+    class DataList(BaseModel):
+        data: list[Data]
+
+    text = ""  # Initialize text list with empty strings
+    sqls = [""] * len(plan)  # Initialize sqls list with empty strings
+    results_log = []         # Move outside the loop to collect records cleanly
+
+    for j, p in enumerate(plan):
+        p.type = 'Document'
+
+        ###################### hallucination check: LLM might generate a fake id ######################
+        if j == 0:
+            p.sql = "SELECT id, student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')"
+        elif j == 1:
+            p.sql = "SELECT id, student_id FROM mathe.assessment_4 WHERE student_id IN ('1273')"
+        ###############################################################################################
+
+        sqls[j] = p.sql  # Store SQL for later use in metrics log
+
+        if p.type == 'Query':
+            pass
+        elif p.type == 'Document':
+            match = re.search(r"FROM\s+([^\s]+)", p.sql, re.IGNORECASE)
+            print(match)
+            if match:
+                table_name = match.group(1)
+                base_dir = Path(
+                    "/workspaces/Table-Reclamation-Demo/data/mathe_splitted")
+                file_path = base_dir / f"{table_name}.pdf"
+
+                if file_path.exists():
+                    DocumentReader = PdfReader(file_path)
+                    for i in range(len(DocumentReader.pages)):
+                        text += DocumentReader.pages[i].extract_text()
+                else:
+                    print(f"Error: File not found at {file_path}")
+            else:
+                print(
+                    "Error: Could not find a table name in the SQL query.")
+
+    for run_idx in range(100):
+        context_sizes = [
+            2**idx for idx in range(10, 18)] + [512, 1536, 2560, 3072, 3584, 4608]
+        context_sizes.sort()
+
+        for context_size in context_sizes:
+            print(f"\n=== Testing context size: {context_size} ===")
+            chunks = chunk_with_header(text, max_tokens=context_size)
+            all_results = []
+
+            start_time = time.time()
+            for chunk_idx, chunk in enumerate(chunks):
+                print(f"Processing chunk {chunk_idx}/{len(chunks)}")
+
+                response = completion(
+                    model=MODEL,
+                    messages=[
+                        {"role": "system", "content": """
+                            You are a deterministic SQL execution engine.
+
+                            Your task:
+                            Execute the list of SQL queries EXACTLY on the provided dataset.
+
+                            --------------------------------
+                            STRICT RULES (MANDATORY)
+                            --------------------------------
+
+                            1. Output MUST be valid JSON only. No text before or after.
+                            2. Output MUST match EXACTLY this schema:
+
+                            {
+                            "header": ["column1", "..."],
+                            "data": [["value1", "..."]],
+                            "explanation": "short explanation"
+                            }
+
+                            3. DO NOT wrap output in a list.
+                            4. DO NOT return multiple JSON objects.
+                            5. DO NOT repeat the query.
+                            6. DO NOT hallucinate values.
+                            7. ONLY return rows that EXACTLY match the WHERE condition.
+                            8. If NO rows match → return:
+                            "data": []
+
+                            9. Each row in "data" MUST have the SAME number of columns as "header".
+                            10. NEVER return malformed rows (e.g., ["123"] if 2 columns expcted).
+
+                            --------------------------------
+                            DATASET RULES
+                            --------------------------------
+
+                            - Dataset is RAW TEXT (space-separated)
+                            - First line = column names
+                            - Each next line = one row
+                            - You MUST manually parse rows
+                            - Columns are separated by spaces
+
+                            --------------------------------
+                            SQL RULES
+                            --------------------------------
+
+                            - Only use the provided dataset
+                            - Apply WHERE conditions strictly
+                            - SELECT only requested columns
+                            - DISTINCT = remove duplicates
+                            
+                            IMPORTANT FINAL CHECK (before answering):
+                            - Is JSON valid? ✔
+                            - Does each row match header length? ✔
+                            - Any hallucinated values? ✘
+                            - Any partial matches? ✘
+
+                            If any rule is violated → FIX before returning.
+                            """},
+                        {"role": "user", "content": f"DATASET:{chunk} SQL QUERY: {sqls} Return ONLY the JSON."}
+                    ],
+                    response_format=Data,
+                    api_base="http://host.docker.internal:11434",
+                    timeout=7200,
+                )
+                print(response)
+                all_results.append(response)
+
+            walltime = time.time() - start_time
+            all_data = []
+            headers = None
+
+            for res in all_results:
+                try:
+                    content = res.choices[0].message.content
+                    parsed = json.loads(content)
+                    if headers is None:
+                        headers = parsed.get("header", [])
+                    all_data.extend(parsed.get("data", []))
+                except Exception as e:
+                    print("Skipping invalid response:", e)
+
+            result = {
+                "header": headers,
+                "data": all_data
+            }
+
+            # --- FIXED BUG: text[j].split instead of text.split ---
+            data_lines = [line for line in text[j].split(
+                "\n") if line.strip() and "student_id" not in line]
+            total_dataset_rows = len(data_lines)
+
+            actual_p = 200
+            actual_n = max(0, total_dataset_rows - actual_p)
+
+            tp = 0
+            fp = 0
+
+            for d in result["data"]:
+                if len(d) >= 2 and (str(d[1]) == '3409' or str(d[1]) == '1273'):
+                    tp += 1
+                else:
+                    fp += 1
+
+            fn = max(0, actual_p - tp)
+            tn = max(0, actual_n - fp)
+
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            fall_out = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+            f1_denominator = precision + recall
+            f1_score = 2 * (precision * recall) / \
+                f1_denominator if f1_denominator > 0 else 0.0
+
+            total_population = tp + tn + fp + fn
+            accuracy = (tp + tn) / \
+                total_population if total_population > 0 else 0.0
+
+            results_log.append({
+                "GPU": GPU,
+                "context_size": context_size,
+                "walltime": walltime,
+                "TP": tp,
+                "TN": tn,
+                "FP": fp,
+                "FN": fn,
+                "Recall": recall,
+                "Precision": precision,
+                "Specificity": specificity,
+                "Fall-out": fall_out,
+                "F1-Score": f1_score,
+                "Accuracy": accuracy,
+                "num_chunks": len(chunks),
+                "num_rows": len(result["data"]),
+                "result": result
+            })
+
+        # --- JSON EXPORT CODE ---
+        log_file_path = "logs_prejoined_queries.json"
+        existing_logs = {}
+
+        if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
+            try:
+                with open(log_file_path, "r", encoding="utf-8") as f:
+                    existing_logs = json.load(f)
+            except json.JSONDecodeError:
+                print(
+                    f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
+
+        if MODELNAME in existing_logs:
+            existing_logs[MODELNAME].extend(results_log)
+        else:
+            existing_logs[MODELNAME] = results_log
+
+        with open(log_file_path, "w", encoding="utf-8") as f:
+            json.dump(existing_logs, f, indent=4)
+
+    # --- PLOT GENERATION OUTSIDE OF EXECUTION LOOP ---
+    if results_log:
+        recall_list = [r["Recall"] for r in results_log]
+        precision_list = [r["Precision"] for r in results_log]
+        sizes = [r["context_size"] for r in results_log]
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.plot(
+            recall_list,
+            precision_list,
+            marker='o',
+            markersize=8,
+            color='tab:purple',
+            linestyle='-',
+            label='Model Performance Trajectory'
+        )
+
+        texts = []
+        for idx, txt in enumerate(sizes):
+            texts.append(ax.annotate(
+                f"{txt}",
+                (recall_list[idx], precision_list[idx]),
+                fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.3",
+                          fc="white", ec="gray", alpha=0.8)
+            ))
+
+        if HAS_ADJUST_TEXT:
+            print("[INFO] Adjusting labels to prevent overlap...")
+            adjust_text(
+                texts,
+                x=recall_list,
+                y=precision_list,
+                expand_points=(2.0, 2.0),
+                force_text=(0.3, 0.6),
+                force_points=(0.2, 0.5),
+                lim=500,
+                arrowprops=dict(arrowstyle="->", color='gray',
+                                lw=0.5, alpha=0.7)
+            )
+        else:
+            for t in texts:
+                t.set_va('center')
+                t.set_ha('center')
+
+        ax.set_title("Precision-Recall Space by Context Size")
+        ax.set_xlabel("Recall (True Positive Rate)")
+        ax.set_ylabel("Precision (Positive Predictive Value)")
+        ax.set_xlim([-0.08, 1.08])
+        ax.set_ylim([-0.08, 1.08])
+        ax.grid(True, which="both", ls="--", alpha=0.5)
+        ax.legend(loc='upper right')
+
+        fig.tight_layout()
+        plt.savefig(f"pr_plot_{MODELNAME}.png")
+        plt.show()
+        plt.close()
