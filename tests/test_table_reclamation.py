@@ -143,6 +143,14 @@ QUESTIONS = [
     "Fetch the assessments of student number 1273 and student number 3409",  # 2 SQL Sequences
 ]
 
+QUESTIONS_RAG = [
+    "According to the 2021 data, which European country has the highest per-capita sales of ice cream, and how much do they consume?",
+    "What were the top three most popular ice cream flavors ranked by the professional association Uniteis in 2021?",
+    "The text mentions German ice cream consumption using two different metrics (litres and scoops). Can you summarize what the text says about Germany's consumption using both of these metrics?",
+    "According to the text, which countries rank lower than Spain in ice cream consumption, and which countries bring up the very rear of the table?",
+    "How does the data source from Uniteis (2021) differ in its methodology from the research conducted by Premier Inn (2024)?"
+]
+
 
 @pytest.mark.parametrize("question", QUESTIONS)
 def test_generate_mathe_plan(planner_mathe_split: AccessPlanner, question: str):
@@ -266,7 +274,7 @@ def test_generate_prompt(planner_mathe_split: AccessPlanner, question: str):
                                     - Apply WHERE conditions strictly
                                     - SELECT only requested columns
                                     - DISTINCT = remove duplicates
-                                    
+
                                     IMPORTANT FINAL CHECK (before answering):
                                     - Is JSON valid? ✔
                                     - Does each row match header length? ✔
@@ -484,13 +492,14 @@ def test_litellm():
     print(response)
 
 
-def test_embedding():
-    user_input = "What's the best snack in summer?"
-
+@pytest.mark.parametrize("question", QUESTIONS_RAG)
+def test_embedding(question: str):
+    user_input = question
+    source_document = ""
     #########################################
 
     # 1. Connect to the local PostgreSQL instance
-    # TODO: set config/env
+    # TODO: set DB config/env
     conn_info = "dbname=rag user=postgres password=password host=db_rag port=5432"
 
     with psycopg.connect(conn_info) as conn:
@@ -510,9 +519,9 @@ def test_embedding():
 
             # 3. Execute the query using placeholders %s for safety
             query = """
-                SELECT * 
-                FROM items 
-                ORDER BY embedding <-> %s::vector 
+                SELECT *
+                FROM items
+                ORDER BY embedding <-> %s::vector
                 LIMIT 1;
             """
 
@@ -524,6 +533,158 @@ def test_embedding():
                 name, distance = result
                 print(f"Nearest Match: {name}")
                 print(f"Distance: {distance}")
+            source_document = name
+
+    class Data(BaseModel):
+        header: list[str]
+        data: list[list[str]]
+        explanation: str
+
+    class DataList(BaseModel):
+        data: list[Data]
+
+    # 2. Dynamically construct the file path using f-strings
+    base_dir = Path(
+        "/workspaces/Table-Reclamation-Demo/data/rag")
+    file_path = base_dir / f"{source_document}.pdf"
+    text = ""
+
+    # 3. Process the file if it exists
+    if file_path.exists():
+        DocumentReader = PdfReader(file_path)
+        for i in range(len(DocumentReader.pages)):
+            text += DocumentReader.pages[i].extract_text()
+    else:
+        print(f"Error: File not found at {file_path}")
+
+    context_sizes = [2048]
+    context_sizes.sort()
+    results_log = []
+
+    for context_size in context_sizes:
+        print(f"\n=== Testing context size: {context_size} ===")
+
+        chunks = chunk_without_header(
+            text, max_tokens=context_size)
+        all_results = []
+
+        start_time = time.time()
+        for i, chunk in enumerate(chunks):
+            print(f"Processing chunk {i}/{len(chunks)}")
+
+            response = completion(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": """
+                        You are a deterministic SQL execution engine.
+
+                        Your task:
+                        Execute the SQL query EXACTLY on the provided dataset.
+
+                        --------------------------------
+                        STRICT RULES (MANDATORY)
+                        --------------------------------
+
+                        1. Output MUST be valid JSON only. No text before or after.
+                        2. Output MUST match EXACTLY this schema:
+
+                        {
+                        "header": ["column1", "..."],
+                        "data": [["value1", "..."]],
+                        "explanation": "short explanation"
+                        }
+
+                        3. DO NOT wrap output in a list.
+                        4. DO NOT return multiple JSON objects.
+                        5. DO NOT repeat the query.
+                        6. DO NOT hallucinate values.
+                        7. ONLY return rows that EXACTLY match the WHERE condition.
+                        8. If NO rows match → return:
+                        "data": []
+
+                        9. Each row in "data" MUST have the SAME number of columns as "header".
+                        10. NEVER return malformed rows (e.g., ["123"] if 2 columns expcted).
+
+                        --------------------------------
+                        DATASET RULES
+                        --------------------------------
+
+                        - Dataset is RAW TEXT (space-separated)
+                        - First line = column names
+                        - Each next line = one row
+                        - You MUST manually parse rows
+                        - Columns are separated by spaces
+
+                        --------------------------------
+                        SQL RULES
+                        --------------------------------
+
+                        - Only use the provided dataset
+                        - Apply WHERE conditions strictly
+                        - SELECT only requested columns
+                        - DISTINCT = remove duplicates
+                        
+                        IMPORTANT FINAL CHECK (before answering):
+                        - Is JSON valid? ✔
+                        - Does each row match header length? ✔
+                        - Any hallucinated values? ✘
+                        - Any partial matches? ✘
+
+                        If any rule is violated → FIX before returning.
+                        """},
+                    {"role": "user", "content": f"""
+                        DATASET:
+                        {chunk}
+
+                        SQL QUERY:
+                        {user_input}
+
+                        Return ONLY the JSON.
+                        """
+                     }],
+                response_format=Data,
+                api_base="http://host.docker.internal:11434",
+                timeout=7200,
+                # stream=False,
+                # extra_body={
+                #     "options": {
+                #         "multi_token_prediction": False,
+                #         "temperature": 0,
+                #         # "num_predict": 512
+                #     }
+                # }
+            )
+
+            print(response)
+            all_results.append(response)
+
+        walltime = time.time() - start_time
+        print(all_results)
+        print("Received={}".format(all_results))
+
+        all_data = []
+        headers = None
+
+        for res in all_results:
+            try:
+                content = res.choices[0].message.content
+                parsed = json.loads(content)
+
+                if headers is None:
+                    headers = parsed.get("header", [])
+
+                all_data.extend(parsed.get("data", []))
+
+            except Exception as e:
+                print("Skipping invalid response:", e)
+
+        result = {
+            "header": headers,
+            "data": all_data,
+            "walltime": walltime
+        }
+
+        print(result)
 
 
 @pytest.mark.parametrize("question", QUESTIONS)
@@ -679,9 +840,10 @@ def test_generate_prompt_case2_prejoin(planner_mathe_split: AccessPlanner, quest
                 "data": all_data
             }
 
-            # --- FIXED BUG: text[j].split instead of text.split ---
-            data_lines = [line for line in text[j].split(
-                "\n") if line.strip() and "student_id" not in line]
+            match = re.search(
+                r"SELECT\s+([a-zA-Z0-9_\*]+)", sqls[0], re.IGNORECASE)
+            data_lines = [line for line in text.split(
+                "\n") if line.strip() and match.group(1) not in line]
             total_dataset_rows = len(data_lines)
 
             actual_p = 200
