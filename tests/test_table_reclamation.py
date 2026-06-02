@@ -30,11 +30,11 @@ except ImportError:
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
-# MODEL = "ollama/qwen3.6:35b" #Don't forget to toggle off structured output.
+# MODEL = "ollama/qwen3.6:35b" #Don't forget to toggle 15*off structured output.
 MODEL = "ollama/gemma4:31b"
 # MODEL = "ollama/qwen3.5:122b"
 
-GPU = "H100"
+GPU = "A6000"
 
 MODELNAME = MODEL[7:]
 
@@ -146,9 +146,7 @@ QUESTIONS = [
 QUESTIONS_RAG = [
     "According to the 2021 data, which European country has the highest per-capita sales of ice cream, and how much do they consume?",
     "What were the top three most popular ice cream flavors ranked by the professional association Uniteis in 2021?",
-    "The text mentions German ice cream consumption using two different metrics (litres and scoops). Can you summarize what the text says about Germany's consumption using both of these metrics?",
-    "According to the text, which countries rank lower than Spain in ice cream consumption, and which countries bring up the very rear of the table?",
-    "How does the data source from Uniteis (2021) differ in its methodology from the research conducted by Premier Inn (2024)?"
+    "According to the text, which countries rank lower than Spain in ice cream consumption?"
 ]
 
 
@@ -519,9 +517,9 @@ def test_embedding(question: str):
 
             # 3. Execute the query using placeholders %s for safety
             query = """
-                SELECT *
+                SELECT name, embedding <-> %s::vector AS distance
                 FROM items
-                ORDER BY embedding <-> %s::vector
+                ORDER BY distance 
                 LIMIT 1;
             """
 
@@ -534,6 +532,7 @@ def test_embedding(question: str):
                 print(f"Nearest Match: {name}")
                 print(f"Distance: {distance}")
             source_document = name
+            print(f"Found Source Document for RAG: {source_document}")
 
     class Data(BaseModel):
         header: list[str]
@@ -576,61 +575,43 @@ def test_embedding(question: str):
                 model=MODEL,
                 messages=[
                     {"role": "system", "content": """
-                        You are a deterministic SQL execution engine.
+                        You are an expert Data Extraction Engine.
 
                         Your task:
-                        Execute the SQL query EXACTLY on the provided dataset.
+                        1. Analyze the USER QUESTION to identify the implicit table headers (the attributes or columns being asked for).
+                        2. Map those headers positionally to the raw space-separated DATASET rows.
+                        3. Extract and return the matching records in the strict JSON format below.
 
                         --------------------------------
-                        STRICT RULES (MANDATORY)
+                        STRICT OUTPUT RULES
                         --------------------------------
-
-                        1. Output MUST be valid JSON only. No text before or after.
+                        1. Output MUST be valid JSON only. No markdown wrappers (like ```json), and no text before or after.
                         2. Output MUST match EXACTLY this schema:
 
-                        {
-                        "header": ["column1", "..."],
-                        "data": [["value1", "..."]],
-                        "explanation": "short explanation"
-                        }
+                        {{
+                        "header": ["extracted_column1", "extracted_column2", "..."],
+                        "data": [["value1", "value2", "..."]],
+                        "explanation": "Brief explanation of how the criteria was met"
+                        }}
 
-                        3. DO NOT wrap output in a list.
-                        4. DO NOT return multiple JSON objects.
-                        5. DO NOT repeat the query.
-                        6. DO NOT hallucinate values.
-                        7. ONLY return rows that EXACTLY match the WHERE condition.
-                        8. If NO rows match → return:
+                        3. The "header" array MUST represent the columns inferred from the question (e.g., ["country", "per_capita_sales", "consumption"]).
+                        4. DO NOT wrap the entire JSON output in a list.
+                        5. If NO rows in the text dataset match the criteria in the question → return:
                         "data": []
-
-                        9. Each row in "data" MUST have the SAME number of columns as "header".
-                        10. NEVER return malformed rows (e.g., ["123"] if 2 columns expcted).
-
-                        --------------------------------
-                        DATASET RULES
-                        --------------------------------
-
-                        - Dataset is RAW TEXT (space-separated)
-                        - First line = column names
-                        - Each next line = one row
-                        - You MUST manually parse rows
-                        - Columns are separated by spaces
+                        6. Each row inside the "data" array MUST have the EXACT same number of elements as your inferred "header" array.
+                        7. NEVER return malformed or partial rows.
 
                         --------------------------------
-                        SQL RULES
+                        DATASET PARSING RULES
                         --------------------------------
+                        - The dataset input is RAW TEXT where rows are separated by newlines and values are separated by spaces.
+                        - There are NO column headers inside the raw text dataset. You must look at the question to understand what each space-separated position represents.
+                        - Line-by-line, parse the rows, evaluate if they answer the user's question, and map the values to your inferred headers.
 
-                        - Only use the provided dataset
-                        - Apply WHERE conditions strictly
-                        - SELECT only requested columns
-                        - DISTINCT = remove duplicates
-                        
                         IMPORTANT FINAL CHECK (before answering):
-                        - Is JSON valid? ✔
-                        - Does each row match header length? ✔
-                        - Any hallucinated values? ✘
-                        - Any partial matches? ✘
-
-                        If any rule is violated → FIX before returning.
+                        - Is JSON structurally valid? ✔
+                        - Does each data row length perfectly match the output header length? ✔
+                        - Did you exclude any conversational preambles or postscripts? ✔ (Only output raw JSON)
                         """},
                     {"role": "user", "content": f"""
                         DATASET:
@@ -683,7 +664,7 @@ def test_embedding(question: str):
             "data": all_data,
             "walltime": walltime
         }
-
+        print(all_data)
         print(result)
 
 
