@@ -30,7 +30,7 @@ except ImportError:
 from table_reclamation.facade.table_reclamation import AccessPlanner
 
 dotenv.load_dotenv()
-# MODEL = "ollama/qwen3.6:35b" #Don't forget to toggle 15*off structured output.
+# MODEL = "ollama/qwen3.6:35b" #Don't forget to toggle off structured output.
 MODEL = "ollama/gemma4:31b"
 # MODEL = "ollama/qwen3.5:122b"
 
@@ -720,8 +720,9 @@ def test_generate_prompt_case2_prejoin(planner_mathe_split: AccessPlanner, quest
                     "Error: Could not find a table name in the SQL query.")
 
     for run_idx in range(100):
-        context_sizes = [
-            2**idx for idx in range(10, 18)] + [512, 1536, 2560, 3072, 3584, 4608]
+        # context_sizes = [
+        #     2**idx for idx in range(10, 18)] + [512, 1536, 2560, 3072, 3584, 4608]
+        context_sizes = [32768]
         context_sizes.sort()
 
         for context_size in context_sizes:
@@ -874,25 +875,321 @@ def test_generate_prompt_case2_prejoin(planner_mathe_split: AccessPlanner, quest
                 "result": result
             })
 
-        # --- JSON EXPORT CODE ---
-        log_file_path = "logs_prejoined_queries.json"
-        existing_logs = {}
+            # --- JSON EXPORT CODE ---
+            log_file_path = "logs_prejoined_queries.json"
+            existing_logs = {}
 
-        if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
-            try:
-                with open(log_file_path, "r", encoding="utf-8") as f:
-                    existing_logs = json.load(f)
-            except json.JSONDecodeError:
-                print(
-                    f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
+            if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
+                try:
+                    with open(log_file_path, "r", encoding="utf-8") as f:
+                        existing_logs = json.load(f)
+                except json.JSONDecodeError:
+                    print(
+                        f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
 
-        if MODELNAME in existing_logs:
-            existing_logs[MODELNAME].extend(results_log)
+            if MODELNAME in existing_logs:
+                existing_logs[MODELNAME].extend(results_log)
+            else:
+                existing_logs[MODELNAME] = results_log
+
+            with open(log_file_path, "w", encoding="utf-8") as f:
+                json.dump(existing_logs, f, indent=4)
+
+    # --- PLOT GENERATION OUTSIDE OF EXECUTION LOOP ---
+    if results_log:
+        recall_list = [r["Recall"] for r in results_log]
+        precision_list = [r["Precision"] for r in results_log]
+        sizes = [r["context_size"] for r in results_log]
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.plot(
+            recall_list,
+            precision_list,
+            marker='o',
+            markersize=8,
+            color='tab:purple',
+            linestyle='-',
+            label='Model Performance Trajectory'
+        )
+
+        texts = []
+        for idx, txt in enumerate(sizes):
+            texts.append(ax.annotate(
+                f"{txt}",
+                (recall_list[idx], precision_list[idx]),
+                fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.3",
+                          fc="white", ec="gray", alpha=0.8)
+            ))
+
+        if HAS_ADJUST_TEXT:
+            print("[INFO] Adjusting labels to prevent overlap...")
+            adjust_text(
+                texts,
+                x=recall_list,
+                y=precision_list,
+                expand_points=(2.0, 2.0),
+                force_text=(0.3, 0.6),
+                force_points=(0.2, 0.5),
+                lim=500,
+                arrowprops=dict(arrowstyle="->", color='gray',
+                                lw=0.5, alpha=0.7)
+            )
         else:
-            existing_logs[MODELNAME] = results_log
+            for t in texts:
+                t.set_va('center')
+                t.set_ha('center')
 
-        with open(log_file_path, "w", encoding="utf-8") as f:
-            json.dump(existing_logs, f, indent=4)
+        ax.set_title("Precision-Recall Space by Context Size")
+        ax.set_xlabel("Recall (True Positive Rate)")
+        ax.set_ylabel("Precision (Positive Predictive Value)")
+        ax.set_xlim([-0.08, 1.08])
+        ax.set_ylim([-0.08, 1.08])
+        ax.grid(True, which="both", ls="--", alpha=0.5)
+        ax.legend(loc='upper right')
+
+        fig.tight_layout()
+        plt.savefig(f"pr_plot_{MODELNAME}.png")
+        plt.show()
+        plt.close()
+
+
+@pytest.mark.parametrize("question", QUESTIONS)
+def test_generate_prompt_case1_postjoin(planner_mathe_split: AccessPlanner, question: str):
+    planner_mathe_split.generate_stats()
+    plan = planner_mathe_split.generate_plan(question)
+    print(plan)
+
+    class Data(BaseModel):
+        header: list[str]
+        data: list[list[str]]
+        explanation: str
+
+    class DataList(BaseModel):
+        data: list[Data]
+
+    total_dataset_rows = 0
+
+    for run_idx in range(100):
+        texts = [""] * len(plan)  # Initialize text list with empty strings
+        results_log = []         # Move outside the loop to collect records cleanly
+
+        # + [512, 1536, 2560, 3072, 3584, 4608]
+        context_sizes = [2**idx for idx in range(13, 18)]
+        # context_sizes = [50000, 60000]
+        context_sizes.sort()
+
+        for context_size in context_sizes:
+            print(f"\n=== Testing context size: {context_size} ===")
+            # Initialize chunks list for this context size
+            chunks = [""] * len(plan)
+            all_results = []
+
+            walltime = 0
+            # To track time taken for each query/document
+            elapsed_time = [0] * len(plan)
+
+            for j, p in enumerate(plan):
+                print(f"Processing query {j}/{len(plan)-1}")
+                p.type = 'Document'
+
+                ###################### hallucination check: LLM might generate a fake id ######################
+                if j == 0:
+                    p.sql = "SELECT id, student_id FROM mathe.assessment_10 WHERE student_id IN ('3409')"
+                elif j == 1:
+                    p.sql = "SELECT id, student_id FROM mathe.assessment_4 WHERE student_id IN ('1273')"
+                print(p.sql)
+                ###############################################################################################
+
+                if p.type == 'Query':
+                    pass
+                elif p.type == 'Document':
+                    match = re.search(r"FROM\s+([^\s]+)", p.sql, re.IGNORECASE)
+                    print(match)
+                    if match:
+                        table_name = match.group(1)
+                        base_dir = Path(
+                            "/workspaces/Table-Reclamation-Demo/data/mathe_splitted")
+                        file_path = base_dir / f"{table_name}.pdf"
+                        data_lines = [line for line in texts[j].split(
+                            "\n") if line.strip() and table_name not in line]
+                        total_dataset_rows += len(data_lines)
+
+                        if file_path.exists():
+                            DocumentReader = PdfReader(file_path)
+                            for i in range(len(DocumentReader.pages)):
+                                texts[j] += DocumentReader.pages[i].extract_text()
+                        else:
+                            print(f"Error: File not found at {file_path}")
+                    else:
+                        print(
+                            "Error: Could not find a table name in the SQL query.")
+
+                    chunks[j] = chunk_with_header(
+                        texts[j], max_tokens=context_size)
+
+                    elapsed_time[j] = time.time()
+                    for chunk_idx, chunk in enumerate(chunks[j]):
+                        print(
+                            f"Processing chunk {chunk_idx}/{len(chunks[j])-1}")
+
+                        response = completion(
+                            model=MODEL,
+                            messages=[
+                                {"role": "system", "content": """
+                                    You are a deterministic SQL execution engine.
+
+                                    Your task:
+                                    Execute the list of SQL queries EXACTLY on the provided dataset.
+
+                                    --------------------------------
+                                    STRICT RULES (MANDATORY)
+                                    --------------------------------
+
+                                    1. Output MUST be valid JSON only. No text before or after.
+                                    2. Output MUST match EXACTLY this schema:
+
+                                    {
+                                    "header": ["column1", "..."],
+                                    "data": [["value1", "..."]],
+                                    "explanation": "short explanation"
+                                    }
+
+                                    3. DO NOT wrap output in a list.
+                                    4. DO NOT return multiple JSON objects.
+                                    5. DO NOT repeat the query.
+                                    6. DO NOT hallucinate values.
+                                    7. ONLY return rows that EXACTLY match the WHERE condition.
+                                    8. If NO rows match → return:
+                                    "data": []
+
+                                    9. Each row in "data" MUST have the SAME number of columns as "header".
+                                    10. NEVER return malformed rows (e.g., ["123"] if 2 columns expcted).
+
+                                    --------------------------------
+                                    DATASET RULES
+                                    --------------------------------
+
+                                    - Dataset is RAW TEXT (space-separated)
+                                    - First line = column names
+                                    - Each next line = one row
+                                    - You MUST manually parse rows
+                                    - Columns are separated by spaces
+
+                                    --------------------------------
+                                    SQL RULES
+                                    --------------------------------
+
+                                    - Only use the provided dataset
+                                    - Apply WHERE conditions strictly
+                                    - SELECT only requested columns
+                                    - DISTINCT = remove duplicates
+                                    
+                                    IMPORTANT FINAL CHECK (before answering):
+                                    - Is JSON valid? ✔
+                                    - Does each row match header length? ✔
+                                    - Any hallucinated values? ✘
+                                    - Any partial matches? ✘
+
+                                    If any rule is violated → FIX before returning.
+                                    """},
+                                {"role": "user", "content": f"DATASET:{chunk} SQL QUERY: {p.sql} Return ONLY the JSON."}
+                            ],
+                            response_format=Data,
+                            api_base="http://host.docker.internal:11434",
+                            timeout=7200,
+                        )
+                        print(response)
+                        all_results.append(response)
+                    elapsed_time[j] = time.time() - elapsed_time[j]
+
+            print(all_results)
+            walltime = sum(elapsed_time)
+            all_data = []
+            headers = None
+
+            for res in all_results:
+                try:
+                    content = res.choices[0].message.content
+                    parsed = json.loads(content)
+                    if headers is None:
+                        headers = parsed.get("header", [])
+                    all_data.extend(parsed.get("data", []))
+                except Exception as e:
+                    print("Skipping invalid response:", e)
+
+            result = {
+                "header": headers,
+                "data": all_data
+            }
+
+            actual_p = 200
+            actual_n = max(0, total_dataset_rows - actual_p)
+
+            tp = 0
+            fp = 0
+
+            for d in result["data"]:
+                if len(d) >= 2 and (str(d[1]) == '3409' or str(d[1]) == '1273'):
+                    tp += 1
+                else:
+                    fp += 1
+
+            fn = max(0, actual_p - tp)
+            tn = max(0, actual_n - fp)
+
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            fall_out = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+
+            f1_denominator = precision + recall
+            f1_score = 2 * (precision * recall) / \
+                f1_denominator if f1_denominator > 0 else 0.0
+
+            total_population = tp + tn + fp + fn
+            accuracy = (tp + tn) / \
+                total_population if total_population > 0 else 0.0
+
+            results_log.append({
+                "GPU": GPU,
+                "context_size": context_size,
+                "walltime": walltime,
+                "TP": tp,
+                "TN": tn,
+                "FP": fp,
+                "FN": fn,
+                "Recall": recall,
+                "Precision": precision,
+                "Specificity": specificity,
+                "Fall-out": fall_out,
+                "F1-Score": f1_score,
+                "Accuracy": accuracy,
+                "num_chunks": len(chunks),
+                "num_rows": len(result["data"]),
+                "result": result
+            })
+            print(results_log)
+
+            # --- JSON EXPORT CODE ---
+            log_file_path = "logs_postjoined_queries.json"
+            existing_logs = {}
+
+            if os.path.exists(log_file_path) and os.path.getsize(log_file_path) > 0:
+                try:
+                    with open(log_file_path, "r", encoding="utf-8") as f:
+                        existing_logs = json.load(f)
+                except json.JSONDecodeError:
+                    print(
+                        f"Warning: '{log_file_path}' contains invalid JSON. Starting fresh.")
+
+            if MODELNAME in existing_logs:
+                existing_logs[MODELNAME].extend(results_log)
+            else:
+                existing_logs[MODELNAME] = results_log
+
+            with open(log_file_path, "w", encoding="utf-8") as f:
+                json.dump(existing_logs, f, indent=4)
 
     # --- PLOT GENERATION OUTSIDE OF EXECUTION LOOP ---
     if results_log:

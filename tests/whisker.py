@@ -61,11 +61,13 @@ def create_whisker_plots(json_filepath):
     plt.tight_layout()
 
     # Save the plot as a high-resolution PNG instead of showing it
-    output_filename = f"whisker_plots_{MODEL}.png"
+    output_filename = f"whisker_plots_{MODEL}_prejoined.png"
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     print(f"Success! Plot saved as {output_filename}")
 
 
 if __name__ == "__main__":
     # Ensure you have saved your JSON data into a file named 'data.json'
-    create_whisker_plots('logs.json')
+    # create_whisker_plots('logs.json')
+    # create_whisker_plots('logs_postjoined_queries.json')
+    create_whisker_plots('logs_prejoined_queries.json')
