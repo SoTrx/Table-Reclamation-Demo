@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 import time
@@ -133,6 +134,50 @@ def extract_page_text(i, file_path):
         return ""  # return empty string on error to avoid breaking the whole process
 
 
+def filter_by_dynamic_zscore(results: list[tuple[str, float]], k: float = 2.0):
+    """Filters a sorted list of (name, distance) tuples by evaluating
+
+    the statistical outliers among consecutive distance gaps.
+    """
+    if len(results) <= 2:
+        return results  # Not enough data points to compute standard deviation safely
+
+    distances = [row[1] for row in results]
+
+    # 1. Calculate the progression gap between each sequential document
+    gaps = [distances[i] - distances[i - 1] for i in range(1, len(distances))]
+
+    # 2. Calculate the mean ($\mu$) of the gaps
+    mean_gap = sum(gaps) / len(gaps)
+
+    # 3. Calculate the standard deviation ($\sigma$) of the gaps
+    variance = sum((g - mean_gap) ** 2 for g in gaps) / len(gaps)
+    std_gap = math.sqrt(variance)
+
+    # 4. Set the dynamic maximum gap threshold ($\mu + k \cdot \sigma$)
+    # Adjusting $k$ makes the algorithm more strict (lower $k$) or lenient (higher $k$)
+    dynamic_max_gap = mean_gap + (k * std_gap)
+
+    filtered = [results[0]]
+
+    # 5. Loop through and halt when a gap exceeds the dynamic threshold
+    for i in range(1, len(results)):
+        gap = distances[i] - distances[i - 1]
+
+        if gap > dynamic_max_gap:
+            print(f"\n Dynamic Cutoff Triggered at Rank {i+1}!")
+            print(
+                f"   Gap between '{results[i-1][0]}' and '{results[i][0]}' was {gap:.4f}."
+            )
+            print(
+                f"   Dynamic Maximum Allowed Gap was {dynamic_max_gap:.4f}.\n")
+            break
+
+        filtered.append(results[i])
+
+    return filtered
+
+
 QUESTIONS = [
     "How can I solve a linear system 4x4?",
     "What are the basic concepts of learning linear optimization?",
@@ -144,9 +189,8 @@ QUESTIONS = [
 ]
 
 QUESTIONS_RAG = [
-    "According to the 2021 data, which European country has the highest per-capita sales of ice cream, and how much do they consume?",
-    "What were the top three most popular ice cream flavors ranked by the professional association Uniteis in 2021?",
-    "According to the text, which countries rank lower than Spain in ice cream consumption?"
+    "What is Product Rule?",
+    "What is Diagonalization?"
 ]
 
 
@@ -485,7 +529,7 @@ def test_litellm():
         model=MODEL,
         messages=[
             {"content": "respond in 20 words. who are you?", "role": "user"}],
-        api_base="http://host.docker.internal:11439"
+        api_base="http://host.docker.internal:11434"
     )
     print(response)
 
@@ -493,46 +537,60 @@ def test_litellm():
 @pytest.mark.parametrize("question", QUESTIONS_RAG)
 def test_embedding(question: str):
     user_input = question
-    source_document = ""
-    #########################################
 
-    # 1. Connect to the local PostgreSQL instance
-    # TODO: set DB config/env
-    conn_info = "dbname=rag user=postgres password=password host=db_rag port=5432"
+    conn_info = (
+        "dbname=rag user=postgres password=password host=db_rag port=5432"
+    )
 
     with psycopg.connect(conn_info) as conn:
         print(f"Connection Status: {conn.info.status}")
 
         with conn.cursor() as cur:
-            # Define your embedding as a standard Python list of floats
+            # 1. Generate query embedding vector
             response = embedding(
                 model="ollama/embeddinggemma:300m",
                 input=[user_input],
-                api_base="http://host.docker.internal:11434"
+                api_base="http://host.docker.internal:11434",
+                # Turn on debugging if you need to trace LiteLLM internals:
+                # logger_fn=litellm._turn_on_debug
             )
-            print(response)
-
             embeddings = response.data[0]["embedding"]
-            print(embeddings)
 
-            # 3. Execute the query using placeholders %s for safety
+            # 2. Retrieve all documents sorted by closeness (Euclidean distance)
             query = """
                 SELECT name, embedding <-> %s::vector AS distance
                 FROM items
-                ORDER BY distance 
-                LIMIT 1;
+                ORDER BY distance;
             """
-
             cur.execute(query, (embeddings,))
+            all_results = cur.fetchall()
 
-            # 4. Fetch and print the result
-            result = cur.fetchone()
-            if result:
-                name, distance = result
-                print(f"Nearest Match: {name}")
-                print(f"Distance: {distance}")
-            source_document = name
-            print(f"Found Source Document for RAG: {source_document}")
+            if not all_results:
+                print("No documents found in the database items table.")
+                return
+
+            print(
+                f"Successfully fetched {len(all_results)} total sorted documents."
+            )
+
+            # 3. Apply the dynamic Z-score filtering algorithm
+            # Using $k=2.0$ acts as a standard 95% confidence interval filter for anomalies
+            filtered_results = filter_by_dynamic_zscore(all_results, k=2.0)
+
+            # 4. Display results up to the dynamic cutoff point
+            print(
+                f"--- Dynamically Picked Relevant Context ({len(filtered_results)} docs) ---"
+            )
+            for rank, (name, distance) in enumerate(filtered_results, start=1):
+                print(
+                    f"Rank {rank}: Document = {name:<10} | Distance = {distance:.4f}"
+                )
+
+            # Assign context safely to your downstream processing flow
+            primary_context_documents = [row[0] for row in filtered_results]
+            print(
+                f"\nSent to RAG Prompt Generation Context: {primary_context_documents}"
+            )
 
     class Data(BaseModel):
         header: list[str]
@@ -545,7 +603,7 @@ def test_embedding(question: str):
     # 2. Dynamically construct the file path using f-strings
     base_dir = Path(
         "/workspaces/Table-Reclamation-Demo/data/rag")
-    file_path = base_dir / f"{source_document}.pdf"
+    file_path = base_dir / f"{primary_context_documents}.pdf"
     text = ""
 
     # 3. Process the file if it exists
@@ -1248,3 +1306,76 @@ def test_generate_prompt_case1_postjoin(planner_mathe_split: AccessPlanner, ques
         plt.savefig(f"pr_plot_{MODELNAME}.png")
         plt.show()
         plt.close()
+
+
+@pytest.mark.parametrize("question", QUESTIONS_RAG)
+def rag_embedding_insert(question: str):
+    base_dir = Path(
+        "/workspaces/Table-Reclamation-Demo/data/mathe_unstructured_dataset"
+    )
+    conn_info = (
+        "dbname=rag user=postgres password=password host=db_rag port=5432"
+    )
+
+    # 1. Validate directory and look for PDF files
+    if not base_dir.exists():
+        print(f"Error: Directory not found at {base_dir}")
+        return
+
+    pdf_files = list(base_dir.glob("*.pdf"))
+
+    if not pdf_files:
+        print(f"No PDF files found in {base_dir}")
+        return
+
+    print(f"Found {len(pdf_files)} PDFs to process.")
+
+    # 2. Establish a single database connection for the entire batch
+    with psycopg.connect(conn_info) as conn:
+        print(f"Database Connection Status: {conn.info.status}")
+
+        with conn.cursor() as cur:
+            for file_path in pdf_files:
+                source_document = file_path.stem  # Gets filename without .pdf
+                print(f"\nProcessing: {file_path.name}...")
+
+                try:
+                    # 3. Extract text from the PDF pages
+                    reader = PdfReader(file_path)
+                    text = "".join(
+                        [page.extract_text() or "" for page in reader.pages]
+                    ).strip()
+
+                    if not text:
+                        print(
+                            f"Skipping {file_path.name}: No text could be extracted."
+                        )
+                        continue
+
+                    # 4. Generate LLM embedding
+                    # (Assuming 'embedding' function is imported from your specific library like litellm)
+                    response = embedding(
+                        model="ollama/embeddinggemma:300m",
+                        input=[text],
+                        api_base="http://host.docker.internal:11434",
+                    )
+
+                    embeddings = response.data[0]["embedding"]
+
+                    # 5. Execute safe parameterized insert query
+                    query = """
+                        INSERT INTO items (name, embedding)
+                        VALUES (%s, %s::vector);                
+                    """
+                    cur.execute(query, (source_document, embeddings))
+
+                    # Commit after each file to ensure progress is saved if a later file fails
+                    conn.commit()
+                    print(
+                        f"Successfully inserted embeddings for: {source_document}")
+
+                except Exception as e:
+                    print(f"Error processing {file_path.name}: {e}")
+                    # Rollback the failed transaction chunk so the cursor can keep going
+                    conn.rollback()
+    print("done with embedding insertion for all documents.")
