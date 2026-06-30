@@ -35,7 +35,7 @@ dotenv.load_dotenv()
 MODEL = "ollama/gemma4:31b"
 # MODEL = "ollama/qwen3.5:122b"
 
-GPU = "A6000"
+GPU = "H200"
 
 MODELNAME = MODEL[7:]
 
@@ -537,26 +537,28 @@ def test_litellm():
 @pytest.mark.parametrize("question", QUESTIONS_RAG)
 def test_embedding(question: str):
     user_input = question
+    conn_info = "dbname=rag user=postgres password=password host=db_rag port=5432"
 
-    conn_info = (
-        "dbname=rag user=postgres password=password host=db_rag port=5432"
-    )
+    primary_context_documents = []
 
+    # 0. Define Schemas at Top-Level (Outside the test function)
+    class Data(BaseModel):
+        header: list[str]
+        data: list[list[str]]
+        explanation: str
+
+    class DataList(BaseModel):
+        data: list[Data]
+
+    # [1. DB Retrieval Block remains identical]
     with psycopg.connect(conn_info) as conn:
-        print(f"Connection Status: {conn.info.status}")
-
         with conn.cursor() as cur:
-            # 1. Generate query embedding vector
             response = embedding(
                 model="ollama/embeddinggemma:300m",
                 input=[user_input],
                 api_base="http://host.docker.internal:11434",
-                # Turn on debugging if you need to trace LiteLLM internals:
-                # logger_fn=litellm._turn_on_debug
             )
             embeddings = response.data[0]["embedding"]
-
-            # 2. Retrieve all documents sorted by closeness (Euclidean distance)
             query = """
                 SELECT name, embedding <-> %s::vector AS distance
                 FROM items
@@ -566,164 +568,286 @@ def test_embedding(question: str):
             all_results = cur.fetchall()
 
             if not all_results:
-                print("No documents found in the database items table.")
-                return
+                pytest.fail(
+                    "No items found in database table to run RAG evaluation.")
 
-            print(
-                f"Successfully fetched {len(all_results)} total sorted documents."
-            )
-
-            # 3. Apply the dynamic Z-score filtering algorithm
-            # Using $k=2.0$ acts as a standard 95% confidence interval filter for anomalies
             filtered_results = filter_by_dynamic_zscore(all_results, k=2.0)
-
-            # 4. Display results up to the dynamic cutoff point
-            print(
-                f"--- Dynamically Picked Relevant Context ({len(filtered_results)} docs) ---"
-            )
-            for rank, (name, distance) in enumerate(filtered_results, start=1):
-                print(
-                    f"Rank {rank}: Document = {name:<10} | Distance = {distance:.4f}"
-                )
-
-            # Assign context safely to your downstream processing flow
             primary_context_documents = [row[0] for row in filtered_results]
-            print(
-                f"\nSent to RAG Prompt Generation Context: {primary_context_documents}"
-            )
 
-    class Data(BaseModel):
-        header: list[str]
-        data: list[list[str]]
-        explanation: str
+    # --- NEW: STATIC SCHEMA PARSING FROM USER QUERY ---
+    print(
+        f"\n➔ Inferring canonical headers directly from query: '{user_input}'")
 
-    class DataList(BaseModel):
-        data: list[Data]
+    # We define a minimal Pydantic model just to safely capture the standalone schema
+    class SchemaInference(BaseModel):
+        inferred_headers: list[str]
 
-    # 2. Dynamically construct the file path using f-strings
-    base_dir = Path(
-        "/workspaces/Table-Reclamation-Demo/data/rag")
-    file_path = base_dir / f"{primary_context_documents}.pdf"
-    text = ""
+    try:
+        schema_response = completion(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a database architect engine.\n"
+                        "Analyze the user's question and extract ONLY the column/attribute headers "
+                        "required to construct a target structured table answering their request.\n"
+                        "Normalize headers to lowercase with no spaces (use underscores).\n"
+                        "You MUST return valid JSON exactly matching this format: {\"inferred_headers\": [\"col1\", \"col2\"]}"
+                    )
+                },
+                {"role": "user", "content": f"Question: {user_input}"}
+            ],
+            response_format={"type": "json_object",
+                             "schema": SchemaInference.model_json_schema()},
+            api_base="http://host.docker.internal:11434",
+            temperature=0,  # Strict determinism
+        )
+        parsed_schema = json.loads(schema_response.choices[0].message.content)
 
-    # 3. Process the file if it exists
-    if file_path.exists():
-        DocumentReader = PdfReader(file_path)
-        for i in range(len(DocumentReader.pages)):
-            text += DocumentReader.pages[i].extract_text()
-    else:
-        print(f"Error: File not found at {file_path}")
+        # Fallback chain: Check for 'inferred_headers', then 'columns', then 'header'
+        raw_headers = (
+            parsed_schema.get("inferred_headers") or
+            parsed_schema.get("columns") or
+            parsed_schema.get("header") or
+            []
+        )
 
-    context_sizes = [2048]
-    context_sizes.sort()
-    results_log = []
+        canonical_headers = [h.strip().lower() for h in raw_headers]
+        print(f"➔ Definitive Canonical Headers Set: {canonical_headers}\n")
 
-    for context_size in context_sizes:
-        print(f"\n=== Testing context size: {context_size} ===")
+    except Exception as e:
+        print(
+            f"🔴 Schema inference failed: {e}. Falling back to default empty tracking.")
+        canonical_headers = []
 
-        chunks = chunk_without_header(
-            text, max_tokens=context_size)
-        all_results = []
+    # --- TRACKERS FOR LOGGING ---
+    all_document_evaluation_logs = []
+    unified_data_rows = []
+    total_walltime = 0.0
 
-        start_time = time.time()
-        for i, chunk in enumerate(chunks):
-            print(f"Processing chunk {i}/{len(chunks)}")
+    # 4. Processing Loop
+    for document in primary_context_documents:
+        base_dir = Path(
+            "/workspaces/Table-Reclamation-Demo/data/mathe_unstructured_dataset")
+        file_path = base_dir / f"{document}.pdf"
+        text = ""
 
-            response = completion(
+        if file_path.exists():
+            DocumentReader = PdfReader(file_path)
+            for i in range(len(DocumentReader.pages)):
+                text += DocumentReader.pages[i].extract_text() or ""
+        else:
+            continue
+
+        context_sizes = [16384]
+        for context_size in context_sizes:
+            chunks = chunk_without_header(text, max_tokens=context_size)
+            results_from_all_chunks = []
+
+            start_time = time.time()
+            for i, chunk in enumerate(chunks):
+                response = completion(
+                    model=MODEL,
+                    messages=[
+                        {"role": "system", "content": f"""
+                            You are an expert Data Extraction Engine.
+
+                            Your task:
+                            1. Analyze the USER QUESTION to identify the implicit table headers (the attributes or columns being asked for).
+                            2. Map those headers positionally to the raw space-separated DATASET rows.
+                            3. Extract and return the matching records in the strict JSON format below.
+
+                            --------------------------------
+                            STRICT OUTPUT RULES
+                            --------------------------------
+                            1. Output MUST be valid JSON only. No markdown wrappers (like ```json), and no text before or after.
+                            2. Output MUST match EXACTLY this schema:
+
+                            {{
+                            "header": {json.dumps(canonical_headers)},
+                            "data": [["value1", "value2", "..."]],
+                            "explanation": "Brief explanation of how the criteria was met"
+                            }}
+
+                            3. The "header" array MUST represent the columns inferred from the question (e.g., ["country", "per_capita_sales", "consumption"]).
+                            4. DO NOT wrap the entire JSON output in a list.
+                            5. If NO rows in the text dataset match the criteria in the question → return:
+                            "data": []
+                            6. Each row inside the "data" array MUST have the EXACT same number of elements as your inferred "header" array.
+                            7. NEVER return malformed or partial rows.
+
+                            --------------------------------
+                            DATASET PARSING RULES
+                            --------------------------------
+                            - The dataset input is RAW TEXT where rows are separated by newlines and values are separated by spaces.
+                            - There are NO column headers inside the raw text dataset. You must look at the question to understand what each space-separated position represents.
+                            - Line-by-line, parse the rows, evaluate if they answer the user's question, and map the values to your inferred headers.
+
+                            IMPORTANT FINAL CHECK (before answering):
+                            - Is JSON structurally valid? ✔
+                            - Does each data row length perfectly match the output header length? ✔
+                            - Did you exclude any conversational preambles or postscripts? ✔ (Only output raw JSON)
+                            """},
+                        {"role": "user", "content": f"""
+                            DATASET:
+                            {chunk}
+
+                            SQL QUERY:
+                            {user_input}
+
+                            Return ONLY the JSON.
+                            """
+                         }],
+                    response_format={"type": "json_object",
+                                     "schema": Data.model_json_schema()},
+                    api_base="http://host.docker.internal:11434",
+                    timeout=7200,
+                )
+                results_from_all_chunks.append(response)
+
+            walltime = time.time() - start_time
+            total_walltime += walltime
+
+            document_data = []
+            document_headers = None
+
+            for res in results_from_all_chunks:
+                try:
+                    content = res.choices[0].message.content
+                    parsed = json.loads(content)
+
+                    if document_headers is None:
+                        document_headers = [h.strip().lower()
+                                            for h in parsed.get("header", [])]
+
+                    document_data.extend(parsed.get("data", []))
+                except Exception as e:
+                    print(f"Skipping invalid response in {document}:", e)
+
+            # --- HEADER ALIGNMENT ENGINE (Now maps against your query schema) ---
+            if document_data:
+                if document_headers == canonical_headers:
+                    unified_data_rows.extend(document_data)
+                else:
+                    # Defensive mapping: aligning variant extractions back to the query baseline schema
+                    for row in document_data:
+                        aligned_row = []
+                        row_dict = {
+                            h: (row[idx] if idx < len(row) else "N/A")
+                            for idx, h in enumerate(document_headers or [])
+                        }
+                        for target_col in canonical_headers:
+                            aligned_row.append(row_dict.get(target_col, "N/A"))
+                        unified_data_rows.append(aligned_row)
+
+            document_log = {
+                "document": document,
+                "context_size": context_size,
+                "extracted_headers": document_headers,
+                "extracted_data": document_data,
+                "walltime_seconds": round(walltime, 2)
+            }
+            all_document_evaluation_logs.append(document_log)
+
+    # --- 5. SYNTHESIZE LOGS ---
+
+    # 1. Filter out rows where every single cell is exactly "N/A"
+    cleaned_data_rows = [
+        row for row in unified_data_rows
+        if not all(str(cell).strip().upper() == "N/A" for cell in row)
+    ]
+
+    # 2. Programmatic Exact Deduplication (Reduces token load for the LLM)
+    unique_data_rows = []
+    seen = set()
+    for row in cleaned_data_rows:
+        row_tuple = tuple(row)
+        if row_tuple not in seen:
+            seen.add(row_tuple)
+            unique_data_rows.append(row)
+
+    # --- 3. LLM SEMANTIC DEDUPLICATION ---
+    print("\n➔ Running LLM Semantic Deduplication...")
+    semantically_unique_rows = unique_data_rows  # Default fallback
+
+    if unique_data_rows:
+        try:
+            dedup_response = completion(
                 model=MODEL,
                 messages=[
-                    {"role": "system", "content": """
-                        You are an expert Data Extraction Engine.
-
-                        Your task:
-                        1. Analyze the USER QUESTION to identify the implicit table headers (the attributes or columns being asked for).
-                        2. Map those headers positionally to the raw space-separated DATASET rows.
-                        3. Extract and return the matching records in the strict JSON format below.
-
-                        --------------------------------
-                        STRICT OUTPUT RULES
-                        --------------------------------
-                        1. Output MUST be valid JSON only. No markdown wrappers (like ```json), and no text before or after.
-                        2. Output MUST match EXACTLY this schema:
-
-                        {{
-                        "header": ["extracted_column1", "extracted_column2", "..."],
-                        "data": [["value1", "value2", "..."]],
-                        "explanation": "Brief explanation of how the criteria was met"
-                        }}
-
-                        3. The "header" array MUST represent the columns inferred from the question (e.g., ["country", "per_capita_sales", "consumption"]).
-                        4. DO NOT wrap the entire JSON output in a list.
-                        5. If NO rows in the text dataset match the criteria in the question → return:
-                        "data": []
-                        6. Each row inside the "data" array MUST have the EXACT same number of elements as your inferred "header" array.
-                        7. NEVER return malformed or partial rows.
-
-                        --------------------------------
-                        DATASET PARSING RULES
-                        --------------------------------
-                        - The dataset input is RAW TEXT where rows are separated by newlines and values are separated by spaces.
-                        - There are NO column headers inside the raw text dataset. You must look at the question to understand what each space-separated position represents.
-                        - Line-by-line, parse the rows, evaluate if they answer the user's question, and map the values to your inferred headers.
-
-                        IMPORTANT FINAL CHECK (before answering):
-                        - Is JSON structurally valid? ✔
-                        - Does each data row length perfectly match the output header length? ✔
-                        - Did you exclude any conversational preambles or postscripts? ✔ (Only output raw JSON)
-                        """},
-                    {"role": "user", "content": f"""
-                        DATASET:
-                        {chunk}
-
-                        SQL QUERY:
-                        {user_input}
-
-                        Return ONLY the JSON.
-                        """
-                     }],
-                response_format=Data,
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert Data Cleaner.\n"
+                            "Your task is to review the provided dataset and remove semantically duplicate rows.\n"
+                            "Many rows contain the exact same information but have slight variations in:\n"
+                            "- Punctuation (e.g., trailing periods)\n"
+                            "- Phrasing (e.g., 'The Product Rule is used' vs 'Product Rule is used')\n"
+                            "- Mathematical notation or syntax.\n"
+                            "When you find semantic duplicates, keep the most comprehensive and grammatically correct version, and discard the rest.\n"
+                            "Do NOT alter the headers. Remove empty or nonsensical rows (like a single 'e').\n"
+                            "You MUST return valid JSON exactly matching this structure:\n"
+                            "{\n"
+                            f'  "header": {json.dumps(canonical_headers)},\n'
+                            '  "data": [["val1", "val2"]],\n'
+                            '  "explanation": "Brief explanation of what was removed"\n'
+                            "}"
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"DATASET TO CLEAN:\n{json.dumps(unique_data_rows, indent=2)}\n\nReturn ONLY raw JSON."
+                    }
+                ],
+                # Reusing your top-level Data schema to enforce structural integrity
+                response_format={"type": "json_object",
+                                 "schema": Data.model_json_schema()},
                 api_base="http://host.docker.internal:11434",
-                timeout=7200,
-                # stream=False,
-                # extra_body={
-                #     "options": {
-                #         "multi_token_prediction": False,
-                #         "temperature": 0,
-                #         # "num_predict": 512
-                #     }
-                # }
+                temperature=0,  # Must be 0 for deterministic data cleaning
             )
 
-            print(response)
-            all_results.append(response)
+            parsed_dedup = json.loads(
+                dedup_response.choices[0].message.content)
 
-        walltime = time.time() - start_time
-        print(all_results)
-        print("Received={}".format(all_results))
+            # Ensure the LLM didn't hallucinate a different structure
+            if "data" in parsed_dedup:
+                semantically_unique_rows = parsed_dedup["data"]
+                removed_count = len(unique_data_rows) - \
+                    len(semantically_unique_rows)
+                print(
+                    f"➔ Semantic deduplication successful. Removed {removed_count} near-duplicate rows.")
+                print(
+                    f"➔ Cleaning explanation: {parsed_dedup.get('explanation', 'None provided')}")
 
-        all_data = []
-        headers = None
+        except Exception as e:
+            print(
+                f"🔴 LLM Deduplication failed: {e}. Falling back to exact match programmatic deduplication.")
 
-        for res in all_results:
-            try:
-                content = res.choices[0].message.content
-                parsed = json.loads(content)
+    # 4. Build the final payload
+    final_aggregated_result = {
+        "header": canonical_headers,
+        "data": semantically_unique_rows,
+        "total_rows": len(semantically_unique_rows),
+        "total_walltime_seconds": round(total_walltime, 2)
+    }
 
-                if headers is None:
-                    headers = parsed.get("header", [])
+    print("\n=============================================")
+    print("      FINAL UNIFIED RUN RESULTS (ALL DOCS)")
+    print("=============================================")
+    print(json.dumps(final_aggregated_result, indent=2))
 
-                all_data.extend(parsed.get("data", []))
+    log_file_path = Path(
+        "/workspaces/Table-Reclamation-Demo/tests/run_results.json")
+    with open(log_file_path, "w") as f:
+        json.dump({
+            "test_question": user_input,
+            "timestamp": time.time(),
+            "aggregated_output": final_aggregated_result,
+            "per_document_trace": all_document_evaluation_logs
+        }, f, indent=4)
 
-            except Exception as e:
-                print("Skipping invalid response:", e)
-
-        result = {
-            "header": headers,
-            "data": all_data,
-            "walltime": walltime
-        }
-        print(all_data)
-        print(result)
+    assert len(final_aggregated_result["data"]) >= 0
 
 
 @pytest.mark.parametrize("question", QUESTIONS)

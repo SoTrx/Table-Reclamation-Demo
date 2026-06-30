@@ -9,6 +9,20 @@ def ingest_pdfs_to_rag():
     base_dir = Path(
         "/workspaces/Table-Reclamation-Demo/data/mathe_unstructured_dataset"
     )
+
+    # 0. Connect to default 'postgres' to ensure 'rag' database exists
+    default_conn_info = "dbname=postgres user=postgres password=password host=db_rag port=5432"
+    try:
+        with psycopg.connect(default_conn_info, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                # Check if the database already exists
+                cur.execute("SELECT 1 FROM pg_database WHERE datname='rag'")
+                if not cur.fetchone():
+                    print("Database 'rag' not found. Creating it now...")
+                    cur.execute("CREATE DATABASE rag;")
+    except Exception as e:
+        print(f"Warning/Error checking/creating database: {e}")
+
     conn_info = (
         "dbname=rag user=postgres password=password host=db_rag port=5432"
     )
@@ -31,6 +45,22 @@ def ingest_pdfs_to_rag():
         print(f"Database Connection Status: {conn.info.status}")
 
         with conn.cursor() as cur:
+            # --- ADD THIS SCHEMA SETUP BLOCK ---
+            print("Ensuring database schema exists...")
+            # Enable the pgvector extension if it isn't already
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+
+            # Create the items table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS items (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT,
+                    embedding vector(768)
+                );
+            """)
+            conn.commit()
+            # ----------------------------------
+
             for file_path in pdf_files:
                 source_document = file_path.stem  # Gets filename without .pdf
                 print(f"\nProcessing: {file_path.name}...")

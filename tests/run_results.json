@@ -1,0 +1,149 @@
+{
+    "test_question": "What is Product Rule?",
+    "timestamp": 1782814930.9510374,
+    "aggregated_output": {
+        "header": [
+            "definition",
+            "formula",
+            "example"
+        ],
+        "data": [
+            [
+                "Product Rule is used in differentiating two or more functions that are being multiplied together. It is used to determine the derivative of the product of two functions, the product rule is written as follows.",
+                "N/A",
+                "N/A"
+            ],
+            [
+                "If \ud835\udc66 = \ud835\udc62\ud835\udc63 where u and v are functions of x, then \ud835\udc51\ud835\udc66/\ud835\udc51\ud835\udc65 = \ud835\udc62(\ud835\udc51\ud835\udc63/\ud835\udc51\ud835\udc65) + \ud835\udc63(\ud835\udc51\ud835\udc62/\ud835\udc51\ud835\udc65)",
+                "N/A",
+                "N/A"
+            ]
+        ],
+        "total_rows": 2,
+        "total_walltime_seconds": 19.53
+    },
+    "per_document_trace": [
+        {
+            "document": "22",
+            "context_size": 16384,
+            "extracted_headers": [
+                "term",
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "Product Rule",
+                    "The Product Rule is used when differentiating two or more functions that are being multiplied together"
+                ]
+            ],
+            "walltime_seconds": 2.08
+        },
+        {
+            "document": "21",
+            "context_size": 16384,
+            "extracted_headers": [
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "The Product Rule is used when differentiating two or more functions that are being multiplied together."
+                ]
+            ],
+            "walltime_seconds": 2.03
+        },
+        {
+            "document": "30",
+            "context_size": 16384,
+            "extracted_headers": [
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "Product Rule is used in differentiating two or more functions that are being multiplied together. It is used to determine the derivative of the product of two functions"
+                ]
+            ],
+            "walltime_seconds": 2.08
+        },
+        {
+            "document": "27",
+            "context_size": 16384,
+            "extracted_headers": [
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "If \ud835\udc66 = \ud835\udc62\ud835\udc63 where u and v are functions of x, then \ud835\udc51\ud835\udc66/\ud835\udc51\ud835\udc65 = \ud835\udc62 \ud835\udc51\ud835\udc63/\ud835\udc51\ud835\udc65 + \ud835\udc63 \ud835\udc51\ud835\udc62/\ud835\udc51\ud835\udc65"
+                ]
+            ],
+            "walltime_seconds": 2.26
+        },
+        {
+            "document": "24",
+            "context_size": 16384,
+            "extracted_headers": [
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "Product Rule is used in differentiating two or more functions that are being multiplied together. It is used to determine the derivative of the product of two functions, the product rule is written as follows."
+                ]
+            ],
+            "walltime_seconds": 2.12
+        },
+        {
+            "document": "29",
+            "context_size": 16384,
+            "extracted_headers": [
+                "concept",
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "Product Rule",
+                    "If \ud835\udc66 =  \ud835\udc62\ud835\udc63   where u and v are functions of x, then \ud835\udc51\ud835\udc66/\ud835\udc51\ud835\udc65 = \ud835\udc62 \ud835\udc51\ud835\udc63/\ud835\udc51\ud835\udc65 + \ud835\udc63 \ud835\udc51\ud835\udc62/\ud835\udc51\ud835\udc65"
+                ]
+            ],
+            "walltime_seconds": 2.21
+        },
+        {
+            "document": "26",
+            "context_size": 16384,
+            "extracted_headers": [
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "If \ud835\udc66 = \ud835\udc62\ud835\udc63 where u and v are functions of x, then \ud835\udc51\ud835\udc66/\ud835\udc51\ud835\udc65 = \ud835\udc62(\ud835\udc51\ud835\udc63/\ud835\udc51\ud835\udc65) + \ud835\udc63(\ud835\udc51\ud835\udc62/\ud835\udc51\ud835\udc65)"
+                ],
+                "explanation syrups: The user asked for the Product Rule, which is explicitly defined in the last few lines of the dataset provided."
+            ],
+            "walltime_seconds": 2.25
+        },
+        {
+            "document": "25",
+            "context_size": 16384,
+            "extracted_headers": [
+                "definition"
+            ],
+            "extracted_data": [
+                [
+                    "If \ud835\udc66 = \ud835\udc62\ud835\udc63 where u and v are functions of x, then \ud835\udc51\ud835\udc66/\ud835\udc51\ud835\udc65 = \ud835\udc62 \ud835\udc51\ud835\udc63/\ud835\udc51\ud835\udc65 + \ud835\udc63 \ud835\udc51\ud835\udc62/\ud835\udc51\ud835\udc65"
+                ]
+            ],
+            "walltime_seconds": 2.29
+        },
+        {
+            "document": "28",
+            "context_size": 16384,
+            "extracted_headers": [
+                "product rule"
+            ],
+            "extracted_data": [
+                [
+                    "If \ud835\udc66 = \ud835\udc62\ud835\udc63 where u and v are functions of x, then \ud835\udc51\ud835\udc66 \ud835\udc51\ud835\udc65 = \ud835\udc62 \ud835\udc51\ud835\udc63 \ud835\udc51\ud835\udc65 + \ud835\udc63 \ud835\udc51\ud835\udc62 \ud835\udc51\ud835\udc65"
+                ]
+            ],
+            "walltime_seconds": 2.21
+        }
+    ]
+}
