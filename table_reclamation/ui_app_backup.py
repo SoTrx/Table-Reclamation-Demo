@@ -1,6 +1,5 @@
 # if something breaks, delete other files in the facade directory except __init__.py and this file, then run this file instead using "source .venv/bin/activate; streamlit run table_reclamation/ui_app_backup.py".
 import json
-import math
 import os
 import sys
 import time
@@ -116,30 +115,6 @@ def extract_pdf_text(file_path: Path) -> str:
         return ""
 
 
-def calculate_batch_probability(batch_tuples: list[tuple[str, float]], decay_rate: float = 3.5) -> float:
-    """
-    Estimates the probability [0.0, 1.0] of finding relevant data in a batch of documents
-    based on their pgvector cosine distances.
-    """
-    if not batch_tuples:
-        return 0.0
-
-    # Calculate individual probability p_i = exp(-lambda * d_i) for each doc in the batch
-    individual_probs = []
-    for _, distance in batch_tuples:
-        # Prevent negative distance edge cases; bound p_i between 0.01 and 0.99
-        d = max(0.0, distance)
-        p_i = max(0.01, min(0.99, math.exp(-decay_rate * d)))
-        individual_probs.append(p_i)
-
-    # P(at least one hit) = 1 - ((1 - p1) * (1 - p2) * (1 - p3))
-    prob_no_hits = 1.0
-    for p_i in individual_probs:
-        prob_no_hits *= (1.0 - p_i)
-
-    return 1.0 - prob_no_hits
-
-
 # ==========================================
 # 4) STREAMLIT UI
 # ==========================================
@@ -219,10 +194,8 @@ if st.button("Generate AP"):
                             cur.execute(
                                 query, (response.data[0]["embedding"],))
                             all_results = cur.fetchall()
-                            # MODIFIED: Save both name and distance as tuples (name, distance)
                             st.session_state["rag_docs"] = [
-                                (row[0], float(row[1])) for row in all_results
-                            ] if all_results else []
+                                row[0] for row in all_results] if all_results else []
                 except Exception as e:
                     st.error(f"Database connection error: {e}")
                     st.session_state["rag_docs"] = []
@@ -327,34 +300,14 @@ elif st.session_state.get("rag_mode", False):
 
     # Interactive Batching UI
     if current_index < len(docs):
-        # 1. Preview next batch of up to 3 tuples: (name, distance)
-        next_batch_tuples = docs[current_index: current_index + 3]
-
-        # 2. Calculate batch probability
-        hit_prob = calculate_batch_probability(next_batch_tuples)
-        prob_pct = int(round(hit_prob * 100))
-
-        # 3. Visual UI Indicator for Probability
-        col_prob1, col_prob2 = st.columns([1, 3])
-        with col_prob1:
-            st.metric(
-                label="Next Batch Likelihood",
-                value=f"{prob_pct}%",
-                help="Estimated likelihood that the next 3 documents contain relevant tabular data based on semantic vector similarity."
-            )
-        with col_prob2:
-            st.progress(
-                hit_prob, text=f"Estimated relevance probability for next {len(next_batch_tuples)} documents")
-
-        # 4. Search Button
         if st.button("Search Next 3 Documents"):
             status_text = st.empty()
+            batch = docs[current_index: current_index + 3]
             data_found_in_batch = False
 
-            for i, (document, dist) in enumerate(next_batch_tuples):
+            for i, document in enumerate(batch):
                 status_text.info(
-                    f"Analyzing document '{document}' (Distance: {dist:.3f}) with EXPENSIVE LLM ({EXPENSIVE_MODEL})..."
-                )
+                    f"Analyzing document '{document}' with EXPENSIVE LLM ({EXPENSIVE_MODEL})...")
 
                 text = extract_pdf_text(
                     UNSTRUCTURED_DATA_DIR / f"{document}.pdf")
@@ -430,8 +383,8 @@ elif st.session_state.get("rag_mode", False):
                             document_headers = [h.strip().lower()
                                                 for h in parsed.get("header", [])]
                         document_data.extend(parsed.get("data", []))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        pass  # Silently skip chunk errors in UI to prevent clutter
 
                 # Align and Verify
                 valid_doc_rows = []
@@ -447,14 +400,15 @@ elif st.session_state.get("rag_mode", False):
                 if valid_doc_rows:
                     st.session_state["rag_results"].extend(valid_doc_rows)
                     data_found_in_batch = True
+                    # Exact Deduplication on the fly
                     st.session_state["rag_results"] = list(
                         {tuple(row) for row in st.session_state["rag_results"]})
-                    break
+                    break  # Short-circuit
 
             st.session_state["rag_index"] += len(
-                next_batch_tuples) if not data_found_in_batch else (i + 1)
+                batch) if not data_found_in_batch else (i + 1)
             status_text.empty()
-            st.rerun()
+            st.rerun()  # Refresh UI to show new data and updated index
 
     else:
         st.info("Finished analyzing all retrieved documents.")

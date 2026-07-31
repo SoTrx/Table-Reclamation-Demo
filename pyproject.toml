@@ -18,6 +18,8 @@ dependencies = [
     "psycopg>=3.3.4",
     "pgvector>=0.3.0",
     "seaborn>=0.13.2",
+    "pytest>=9.0.2",
+    "streamlit>=1.54.0",
 ]
 
 [project.optional-dependencies]
