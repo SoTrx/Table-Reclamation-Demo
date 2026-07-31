@@ -43,6 +43,7 @@ python data/rag_generator.py;
 The application processes user queries through a **4-stage progressive pipeline**:
 
 ```
+![alt text](image.png)
                        [ 1. Natural Language Query ]
                                     │
                        [ 2. Lexicon Parse -> UR ]
